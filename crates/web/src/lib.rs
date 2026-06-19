@@ -50,6 +50,7 @@ pub fn router(state: AppState) -> Router {
                 .delete(routes::rules::delete_one),
         )
         .route("/api/analytics/stats", get(routes::analytics::stats))
+        .route("/api/reports/top", get(routes::reports::top))
         .route("/api/simulation/push", post(routes::simulation::push))
         .layer(cors)
         .with_state(state)

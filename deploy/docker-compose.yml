@@ -77,6 +77,63 @@ services:
       timeout: 10s
       retries: 12
 
+  app:
+    image: rre/rules-engine:latest
+    container_name: rre-app
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: postgres://rules:rules@postgres:5432/ruleaudit
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: ruleaudit
+      CLICKHOUSE_USER: rules
+      CLICKHOUSE_PASSWORD: rules
+      KAFKA_BROKERS: redpanda:9092
+      SOURCE_TOPIC: ${SOURCE_TOPIC:-source-events}
+      TARGET_TOPIC: ${TARGET_TOPIC:-target-events}
+      CONSUMER_GROUP: ${CONSUMER_GROUP:-rules-engine}
+      TRANSACTIONAL_ID: ${TRANSACTIONAL_ID:-rules-engine-txn}
+      HTTP_PORT: 8080
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    deploy:
+      resources:
+        limits:
+          memory: ${APP_MEM_LIMIT:-512M}
+
+  frontend:
+    image: rre/frontend:latest
+    container_name: rre-frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      NGINX_PORT: 80
+      BACKEND_URL: http://app:8080
+    depends_on:
+      app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEM_LIMIT:-64M}
+
   sre-agent:
     image: rre/sre-agent:latest
     container_name: rre-sre-agent

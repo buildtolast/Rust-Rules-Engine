@@ -1,7 +1,7 @@
 //! store-clickhouse — batched audit writer, migrations (S3), analytics queries (S4)
 
 pub mod analytics;
-pub use analytics::{query_analytics, AnalyticsStats, RuleStat, TimeSeriesPoint};
+pub use analytics::{query_analytics, query_top_audits, AnalyticsStats, AuditQueryRow, RuleStat, TimeSeriesPoint};
 pub use clickhouse::Client as ClickHouseClient;
 
 use chrono::{DateTime, Utc};

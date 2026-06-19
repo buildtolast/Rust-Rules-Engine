@@ -34,6 +34,7 @@ struct TsRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuleStat {
     pub rule_id: String,
     pub matched: u64,
@@ -42,6 +43,7 @@ pub struct RuleStat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TimeSeriesPoint {
     pub timestamp: DateTime<Utc>,
     pub rule_id: String,
@@ -51,6 +53,7 @@ pub struct TimeSeriesPoint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AnalyticsStats {
     pub total_messages: u64,
     pub total_evaluations: u64,
@@ -59,6 +62,54 @@ pub struct AnalyticsStats {
     pub avg_parse_time_nano: u64,
     pub avg_eval_time_nano: u64,
     pub avg_total_time_nano: u64,
+}
+
+/// A single row from the raw audits table, for the Reports tab.
+#[derive(Debug, Clone, Serialize, Deserialize, Row)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditQueryRow {
+    pub audit_id: String,
+    pub rule_id: String,
+    pub audit_type: String,
+    pub reason: String,
+    pub source_event: String,
+    pub routed_event: String,
+    pub source_topic: String,
+    pub partition: i32,
+    pub offset: i64,
+    pub timestamp_secs: u32,
+    pub parse_time_nano: u64,
+    pub eval_time_nano: u64,
+    pub total_time_nano: u64,
+}
+
+pub async fn query_top_audits(
+    client: &Client,
+    audit_type: &str,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    limit: u32,
+) -> Result<Vec<AuditQueryRow>, Error> {
+    let from_ts = from.timestamp() as u32;
+    let to_ts = to.timestamp() as u32;
+    let rows = client
+        .query(
+            "SELECT audit_id, rule_id, toString(audit_type) AS audit_type, \
+             ifNull(reason, '') AS reason, source_event, \
+             ifNull(routed_event, '') AS routed_event, source_topic, \
+             partition, offset, toUnixTimestamp(timestamp) AS timestamp_secs, \
+             parse_time_nano, eval_time_nano, total_time_nano \
+             FROM ruleaudit.audits \
+             WHERE audit_type = ? AND timestamp >= toDateTime(?) AND timestamp <= toDateTime(?) \
+             ORDER BY timestamp DESC LIMIT ?",
+        )
+        .bind(audit_type)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(limit)
+        .fetch_all::<AuditQueryRow>()
+        .await?;
+    Ok(rows)
 }
 
 pub async fn query_analytics(

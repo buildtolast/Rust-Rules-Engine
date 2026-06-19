@@ -6,3 +6,9 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+rules-core = { path = "../core" }
+cel-interpreter = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+chrono = { workspace = true }

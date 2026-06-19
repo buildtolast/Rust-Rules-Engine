@@ -2,7 +2,9 @@
 //! `Spring-Kafka-Stream-Rules` system. See plans/rust-rules-engine-rebuild.md (S1).
 
 use chrono::{TimeZone, Utc};
-use core::{audit_id, AuditRecord, AuditType, EvaluationResult, Rule, RuleResult, SourceEvent};
+use rules_core::{
+    audit_id, AuditRecord, AuditType, EvaluationResult, Rule, RuleResult, SourceEvent,
+};
 use serde_json::json;
 
 #[test]

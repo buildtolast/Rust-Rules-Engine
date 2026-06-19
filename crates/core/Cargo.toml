@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "rules-core"
 edition.workspace = true
 rust-version.workspace = true
 version = "0.0.0"

@@ -1,8 +1,9 @@
-FROM rust:1.87 AS builder
+FROM rust:1.89 AS builder
 WORKDIR /app
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY bin/ bin/
+COPY migrations/ migrations/
 
 RUN cargo build --release -p rules-engine
 

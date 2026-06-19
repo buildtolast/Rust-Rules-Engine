@@ -61,6 +61,12 @@ if ! docker info > /dev/null 2>&1; then
     echo "Docker is not running. Start Docker and retry."
     exit 1
 fi
+
+# Load UNSLOTH_API_KEY from ~/.zshrc if not already set, so the SRE agent LLM works.
+if [ -z "${UNSLOTH_API_KEY:-}" ] && [ -f "$HOME/.zshrc" ]; then
+    UNSLOTH_API_KEY="$(source "$HOME/.zshrc" 2>/dev/null; echo "${UNSLOTH_API_KEY:-}")"
+    export UNSLOTH_API_KEY
+fi
 if docker compose version > /dev/null 2>&1; then
     DC="docker compose"
 else

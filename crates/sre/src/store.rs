@@ -23,25 +23,22 @@ pub struct SreObservation {
 }
 
 pub struct SreStore {
-    inserter: clickhouse::inserter::Inserter<SreObservation>,
+    client: Client,
 }
 
 impl SreStore {
     pub fn new(client: &Client) -> Self {
-        let mut inserter = client.inserter::<SreObservation>("ruleaudit.sre_observations");
-        inserter = inserter.with_max_rows(100);
-        inserter = inserter.with_period(Some(std::time::Duration::from_secs(5)));
-        Self { inserter }
+        Self { client: client.clone() }
     }
 
     pub async fn write(&mut self, obs: &SreObservation) -> Result<(), SreStoreError> {
-        self.inserter.write(obs).await?;
-        self.inserter.commit().await?;
+        let mut insert = self.client.insert::<SreObservation>("sre_observations").await?;
+        insert.write(obs).await?;
+        insert.end().await?;
         Ok(())
     }
 
     pub async fn end(self) -> Result<(), SreStoreError> {
-        self.inserter.end().await?;
         Ok(())
     }
 }

@@ -2,6 +2,7 @@
 
 pub mod analytics;
 pub use analytics::{query_analytics, AnalyticsStats, RuleStat, TimeSeriesPoint};
+pub use clickhouse::Client as ClickHouseClient;
 
 use chrono::{DateTime, Utc};
 use clickhouse::Client;

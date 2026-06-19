@@ -6,3 +6,10 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "macros"] }
+rules-core = { path = "../core" }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -11,6 +11,8 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/web/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/core/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/eval/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/store-clickhouse/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/store-postgres/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

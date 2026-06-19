@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::{ApiError, AppState};
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuleBody {
     pub description: String,
     pub expression: String,

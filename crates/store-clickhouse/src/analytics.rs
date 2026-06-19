@@ -66,7 +66,6 @@ pub struct AnalyticsStats {
 
 /// A single row from the raw audits table, for the Reports tab.
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
-#[serde(rename_all = "camelCase")]
 pub struct AuditQueryRow {
     pub audit_id: String,
     pub rule_id: String,

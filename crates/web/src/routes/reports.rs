@@ -78,12 +78,8 @@ pub async fn top(
     let to = q.to.unwrap_or_else(Utc::now);
     let from = q.from.unwrap_or_else(|| to - Duration::hours(24));
     let limit = q.limit.min(100);
-    // ClickHouse stores audit_type as 'Matched', 'Unmatched', 'Error' but frontend sends 'MATCHED' etc.
-    let ch_type = match q.audit_type.to_uppercase().as_str() {
-        "MATCHED" => "Matched",
-        "UNMATCHED" => "Unmatched",
-        _ => "Error",
-    };
+    let ch_type = q.audit_type.to_uppercase();
+    let ch_type = ch_type.as_str();
     let rows = store_clickhouse::query_top_audits(&s.ch_client, ch_type, from, to, limit).await?;
     Ok(Json(rows.into_iter().map(AuditRecordOut::from).collect()))
 }

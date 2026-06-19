@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Zap, Clock, AlertCircle, CheckCircle2, BarChart3 } from 'lucide-react';
+import { Send, Zap, Clock, AlertCircle, CheckCircle2, BarChart3, Activity } from 'lucide-react';
 import type { AnalyticsStats } from './types';
 
 const SimulationPanel: React.FC = () => {
@@ -11,19 +11,20 @@ const SimulationPanel: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/analytics/stats?from=' + new Date(Date.now() - 60000).toISOString());
+      // 5-minute window so recent simulation runs are always visible
+      const response = await fetch('/api/analytics/stats?from=' + new Date(Date.now() - 300000).toISOString());
       if (response.ok) {
         const data = await response.json();
         setStats(data);
       }
-    } catch (err) {
-      console.error('Failed to fetch real-time stats', err);
+    } catch {
+      // ignore — backend may be temporarily unavailable
     }
   };
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // 30s to ease load on the backend/DB
+    const interval = setInterval(fetchStats, 15000); // poll every 15s
     return () => clearInterval(interval);
   }, []);
 
@@ -36,10 +37,13 @@ const SimulationPanel: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         setLastResult(result);
+        // Pipeline takes a few seconds to process — refresh stats after a short delay
+        setTimeout(fetchStats, 4000);
+        setTimeout(fetchStats, 10000);
       } else {
         setError('Failed to trigger simulation');
       }
-    } catch (err) {
+    } catch {
       setError('Connection error occurred');
     } finally {
       setIsSimulating(false);
@@ -186,7 +190,7 @@ const SimulationPanel: React.FC = () => {
             <div className="w-2 h-2 bg-indigo-400 rounded-full animate-ping"></div>
             <span className="text-xs font-bold uppercase tracking-widest">Live Processing Monitor</span>
           </div>
-          <h3 className="text-3xl font-bold mb-6">Pipeline Activity (Last 60s)</h3>
+          <h3 className="text-3xl font-bold mb-6">Pipeline Activity (Last 5m)</h3>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>
@@ -213,5 +217,3 @@ const SimulationPanel: React.FC = () => {
 };
 
 export default SimulationPanel;
-
-import { Activity } from 'lucide-react';

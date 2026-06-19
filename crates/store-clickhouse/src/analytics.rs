@@ -116,7 +116,9 @@ pub async fn query_analytics(
     from: DateTime<Utc>,
     to: DateTime<Utc>,
 ) -> Result<AnalyticsStats, Error> {
-    let from_ts = from.timestamp() as u32;
+    // Truncate to the start of the hour so we always include the current/earliest
+    // aggregation bucket, regardless of where in the hour the query starts.
+    let from_ts = (from.timestamp() / 3600 * 3600) as u32;
     let to_ts = to.timestamp() as u32;
 
     // Query 1: total_messages

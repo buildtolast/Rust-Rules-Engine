@@ -6,3 +6,11 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+clickhouse = { version = "0.15.1", features = ["inserter", "chrono"] }
+rules-core = { path = "../core" }
+serde = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

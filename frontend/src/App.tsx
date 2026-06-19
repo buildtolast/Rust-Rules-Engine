@@ -17,15 +17,17 @@ import {
   TrendingUp,
   Settings,
   Zap,
-  FileText
+  FileText,
+  ShieldAlert
 } from 'lucide-react';
 import type { Rule } from './types';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import SimulationPanel from './SimulationPanel';
 import { ReportsTab } from './ReportsTab';
+import { SreTab } from './SreTab';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports'>('management');
+  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports' | 'sre'>('management');
   const [isInitializing, setIsInitializing] = useState(true);
   const [systemHealth, setSystemHealth] = useState<any>(null);
 
@@ -233,12 +235,19 @@ const App: React.FC = () => {
             <Zap size={18} />
             Traffic Simulator
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('reports')}
             className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'reports' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             <FileText size={18} />
             Compliance Reports
+          </button>
+          <button
+            onClick={() => setActiveTab('sre')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'sre' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <ShieldAlert size={18} />
+            SRE Monitor
           </button>
         </div>
 
@@ -437,8 +446,10 @@ const App: React.FC = () => {
           <AnalyticsDashboard />
         ) : activeTab === 'simulator' ? (
           <SimulationPanel />
-        ) : (
+        ) : activeTab === 'reports' ? (
           <ReportsTab />
+        ) : (
+          <SreTab />
         )}
       </div>
 

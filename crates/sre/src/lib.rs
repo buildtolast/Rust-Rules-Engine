@@ -145,7 +145,7 @@ async fn analyze_container(
     let hash = sha256_hex(&logs);
     let snippet: String = logs.chars().take(500).collect();
 
-    let finding = match llm.analyze(&c.name, &logs).await {
+    let mut finding = match llm.analyze(&c.name, &logs).await {
         Ok(f) => {
             state.write().await.llm_available = true;
             f
@@ -156,6 +156,8 @@ async fn analyze_container(
             return;
         }
     };
+    finding.container_name = c.name.clone();
+    finding.observed_at = Some(Utc::now());
 
     let obs = SreObservation {
         observed_at:     Utc::now(),

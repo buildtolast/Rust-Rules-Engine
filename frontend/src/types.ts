@@ -33,6 +33,31 @@ export interface AnalyticsStats {
   avgTotalTimeNano: number;
 }
 
+export interface SreFinding {
+  container_name: string;
+  observed_at: string | null;
+  severity: 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
+  category: string;
+  finding: string;
+  proposed_fix: string;
+}
+
+export interface SreContainerStatus {
+  name: string;
+  id: string;
+  running: boolean;
+  started_at: string | null;
+  health: { status: string };
+  last_checked_at: string;
+  last_severity: string | null;
+}
+
+export interface SreStatus {
+  containers: SreContainerStatus[];
+  llm_available: boolean;
+  last_scan_at: string | null;
+}
+
 export interface AuditRecord {
   auditId: string;
   ruleId: string;

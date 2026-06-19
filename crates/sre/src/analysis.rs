@@ -11,10 +11,15 @@ pub enum AnalysisError {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Finding {
-    pub severity:     String,
-    pub category:     String,
-    pub finding:      String,
-    pub proposed_fix: String,
+    pub severity:       String,
+    pub category:       String,
+    pub finding:        String,
+    pub proposed_fix:   String,
+    /// Populated after LLM response — not parsed from LLM JSON.
+    #[serde(default)]
+    pub container_name: String,
+    #[serde(default)]
+    pub observed_at:    Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub struct AnalysisClient {

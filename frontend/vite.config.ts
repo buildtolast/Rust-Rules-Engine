@@ -13,6 +13,10 @@ export default defineConfig({
       '/health': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+      },
+      '/api/sre': {
+        target: 'http://localhost:8088',
+        changeOrigin: true,
       }
     }
   }

@@ -94,6 +94,7 @@ services:
       CLICKHOUSE_PASSWORD: rules
       LLM_BASE_URL: http://host.docker.internal:8888
       LLM_MODEL: ${LLM_MODEL:-unsloth}
+      LLM_API_KEY: ${UNSLOTH_API_KEY:-}
       SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-60}
       LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
       RUST_LOG: info

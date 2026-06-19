@@ -20,16 +20,21 @@ pub struct Finding {
 pub struct AnalysisClient {
     base_url: String,
     model:    String,
+    api_key:  Option<String>,
     http:     reqwest::Client,
 }
 
 impl AnalysisClient {
-    pub fn new(base_url: impl Into<String>, model: impl Into<String>) -> Self {
+    pub fn new(
+        base_url: impl Into<String>,
+        model: impl Into<String>,
+        api_key: Option<String>,
+    ) -> Self {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("failed to build reqwest client");
-        Self { base_url: base_url.into(), model: model.into(), http }
+        Self { base_url: base_url.into(), model: model.into(), api_key, http }
     }
 
     pub async fn analyze(
@@ -50,20 +55,29 @@ impl AnalysisClient {
             container, log_window
         );
 
+        // Assistant prefill with "{" forces the model to complete a JSON object
+        // rather than reasoning in prose (works with most OpenAI-compatible endpoints).
         let body = serde_json::json!({
             "model": self.model,
             "messages": [
-                { "role": "system", "content": system_prompt },
-                { "role": "user",   "content": user_content  }
+                { "role": "system",    "content": system_prompt },
+                { "role": "user",      "content": user_content  },
+                { "role": "assistant", "content": "{"            }
             ],
-            "temperature": 0.2,
-            "max_tokens":  512
+            "temperature": 0.1,
+            "max_tokens":  300
         });
 
-        let response = self
+        let mut req = self
             .http
             .post(format!("{}/v1/chat/completions", self.base_url))
-            .json(&body)
+            .json(&body);
+
+        if let Some(key) = &self.api_key {
+            req = req.bearer_auth(key);
+        }
+
+        let response = req
             .send()
             .await
             .map_err(|e| AnalysisError::Unavailable(e.to_string()))?
@@ -79,7 +93,60 @@ impl AnalysisClient {
             .as_str()
             .ok_or_else(|| AnalysisError::ParseError("missing content field".into()))?;
 
-        serde_json::from_str::<Finding>(content)
-            .map_err(|e| AnalysisError::ParseError(e.to_string()))
+        // The assistant prefill "{" is not included in the response content — prepend it.
+        let full = format!("{{{content}");
+        extract_json(&full)
+    }
+}
+
+/// Extract the first complete `{...}` JSON object from a string.
+/// The LLM often wraps JSON in prose or markdown — this strips the wrapper.
+fn extract_json(content: &str) -> Result<Finding, AnalysisError> {
+    let start = content
+        .find('{')
+        .ok_or_else(|| AnalysisError::ParseError("no JSON object in LLM response".into()))?;
+    let end = content
+        .rfind('}')
+        .ok_or_else(|| AnalysisError::ParseError("unclosed JSON object in LLM response".into()))?;
+
+    let json_slice = &content[start..=end];
+    serde_json::from_str::<Finding>(json_slice)
+        .map_err(|e| AnalysisError::ParseError(format!("{e}: {json_slice}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finding_deserializes_from_valid_json() {
+        let json = r#"{
+            "severity": "WARN",
+            "category": "latency",
+            "finding": "High latency detected on port 9092",
+            "proposed_fix": "Check broker backpressure"
+        }"#;
+        let f: Finding = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(f.severity, "WARN");
+        assert_eq!(f.category, "latency");
+    }
+
+    #[test]
+    fn finding_parse_error_on_missing_field() {
+        let json = r#"{"severity": "INFO"}"#;
+        let result = serde_json::from_str::<Finding>(json);
+        assert!(result.is_err(), "missing fields should fail to deserialize");
+    }
+
+    #[test]
+    fn analysis_error_unavailable_formats_message() {
+        let e = AnalysisError::Unavailable("connection refused".into());
+        assert!(e.to_string().contains("connection refused"));
+    }
+
+    #[test]
+    fn analysis_error_parse_error_formats_message() {
+        let e = AnalysisError::ParseError("unexpected token".into());
+        assert!(e.to_string().contains("unexpected token"));
     }
 }

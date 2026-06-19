@@ -14,6 +14,7 @@ async fn main() {
         clickhouse_pass: env_require("CLICKHOUSE_PASSWORD"),
         llm_base_url:    env_require("LLM_BASE_URL"),
         llm_model:       std::env::var("LLM_MODEL").unwrap_or_else(|_| "unsloth".into()),
+        llm_api_key:     std::env::var("LLM_API_KEY").ok(),
         scan_interval:   Duration::from_secs(
             std::env::var("SCAN_INTERVAL_SECS")
                 .ok()

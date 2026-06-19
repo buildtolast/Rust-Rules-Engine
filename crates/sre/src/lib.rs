@@ -24,6 +24,7 @@ pub struct SreConfig {
     pub clickhouse_pass:   String,
     pub llm_base_url:      String,
     pub llm_model:         String,
+    pub llm_api_key:       Option<String>,
     pub scan_interval:     Duration,
     pub log_tail_lines:    usize,
     pub dashboard_port:    u16,
@@ -218,7 +219,7 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     let (tx, _rx) = broadcast::channel::<Finding>(256);
 
     // Build analysis client
-    let llm = AnalysisClient::new(&cfg.llm_base_url, &cfg.llm_model);
+    let llm = AnalysisClient::new(&cfg.llm_base_url, &cfg.llm_model, cfg.llm_api_key.clone());
 
     // Spawn analysis loop
     let loop_handle = {

@@ -7,8 +7,8 @@ COPY migrations/ migrations/
 
 RUN cargo build --release -p rules-engine
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/rules-engine /usr/local/bin/rules-engine
 COPY migrations/ /migrations/
 

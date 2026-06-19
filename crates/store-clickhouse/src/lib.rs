@@ -103,27 +103,23 @@ impl AuditRow {
 }
 
 pub struct AuditWriter {
-    inserter: clickhouse::inserter::Inserter<AuditRow>,
+    client: Client,
 }
 
 impl AuditWriter {
-    pub fn new(client: &Client, cfg: &ClickHouseConfig) -> Self {
-        let mut inserter = client.inserter::<AuditRow>("audits");
-        inserter = inserter.with_max_rows(cfg.batch_max_rows);
-        inserter =
-            inserter.with_period(Some(std::time::Duration::from_millis(cfg.batch_period_ms)));
-        Self { inserter }
+    pub fn new(client: &Client, _cfg: &ClickHouseConfig) -> Self {
+        Self { client: client.clone() }
     }
 
     pub async fn write(&mut self, rec: &AuditRecord) -> Result<(), Error> {
         let row = AuditRow::from_record(rec);
-        self.inserter.write(&row).await?;
-        self.inserter.commit().await?;
+        let mut insert = self.client.insert::<AuditRow>("audits").await?;
+        insert.write(&row).await?;
+        insert.end().await?;
         Ok(())
     }
 
     pub async fn end(self) -> Result<(), Error> {
-        self.inserter.end().await?;
         Ok(())
     }
 }

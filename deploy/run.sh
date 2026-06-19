@@ -81,19 +81,21 @@ find_free_port "${REDPANDA_ADMIN_PORT:-9644}" "Redpanda admin"; export REDPANDA_
 find_free_port "${CLICKHOUSE_HTTP_PORT:-8123}" "ClickHouse HTTP"; export CLICKHOUSE_HTTP_PORT="$FREE_PORT"
 find_free_port "${CLICKHOUSE_TCP_PORT:-9000}" "ClickHouse native"; export CLICKHOUSE_TCP_PORT="$FREE_PORT"
 find_free_port "${POSTGRES_PORT:-5432}" "Postgres";          export POSTGRES_PORT="$FREE_PORT"
+find_free_port "${SRE_PORT:-8088}" "SRE dashboard";          export SRE_PORT="$FREE_PORT"
 
 echo "----------------------------------------------------------"
-echo "🚀 Starting Rust-Rules-Engine infra"
+echo "🚀 Starting Rust-Rules-Engine infra + SRE agent"
 echo "📦 Kafka (Redpanda):  localhost:$REDPANDA_PORT"
 echo "🟡 ClickHouse HTTP:   localhost:$CLICKHOUSE_HTTP_PORT  (native $CLICKHOUSE_TCP_PORT)"
 echo "🐘 Postgres:          postgres://rules:rules@localhost:$POSTGRES_PORT/ruleaudit"
+echo "🔍 SRE dashboard:     http://localhost:$SRE_PORT"
 echo "----------------------------------------------------------"
 
 $DC -f "$COMPOSE_FILE" up -d
 
 # ---- health wait ------------------------------------------------------------
 echo "⏳ Waiting for services to become healthy..."
-SERVICES="rre-redpanda rre-clickhouse rre-postgres"
+SERVICES="rre-redpanda rre-clickhouse rre-postgres rre-sre-agent"
 MAX_ATTEMPTS=60
 ATTEMPT=1
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do

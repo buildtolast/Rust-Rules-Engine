@@ -77,6 +77,41 @@ services:
       timeout: 10s
       retries: 12
 
+  sre-agent:
+    image: rre/sre-agent:latest
+    container_name: rre-sre-agent
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.sre
+    ports:
+      - "${SRE_PORT:-8088}:8088"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: ruleaudit
+      CLICKHOUSE_USER: rules
+      CLICKHOUSE_PASSWORD: rules
+      LLM_BASE_URL: http://host.docker.internal:8888
+      LLM_MODEL: ${LLM_MODEL:-unsloth}
+      SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-60}
+      LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
+      RUST_LOG: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8088/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    deploy:
+      resources:
+        limits:
+          memory: ${SRE_MEM_LIMIT:-256M}
+
 volumes:
   rre-clickhouse-data:
   rre-postgres-data:

@@ -16,5 +16,8 @@ rust-version = "1.94"
 license = "MIT"
 
 [workspace.dependencies]
-# Populated by later steps (serde, tokio, axum, rdkafka, sqlx, clickhouse, cel-interpreter…).
-# Kept central so versions are pinned once.
+# Kept central so versions are pinned once. Extended by later steps
+# (tokio, axum, rdkafka, sqlx, clickhouse, cel-interpreter…).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }

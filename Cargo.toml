@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/eval",
+    "crates/store-clickhouse",
+    "crates/store-postgres",
+    "crates/pipeline",
+    "crates/web",
+    "bin/rules-engine",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.94"
+license = "MIT"
+
+[workspace.dependencies]
+# Populated by later steps (serde, tokio, axum, rdkafka, sqlx, clickhouse, cel-interpreter…).
+# Kept central so versions are pinned once.

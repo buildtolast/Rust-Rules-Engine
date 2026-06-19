@@ -436,6 +436,14 @@ PR is green; `git remote -v` shows `origin`.
   toolchain locally; governs CI only. Revisit if a contributor needs channel
   switching.
 
+## Status
+
+- **S0 COMPLETE (2026-06-19).** Workspace (7 members) builds; fmt/clippy/test gate
+  green; infra (Redpanda + ClickHouse + Postgres) verified healthy with exec
+  probes; CI green on PR #1; remote live at
+  `https://github.com/buildtolast/Rust-Rules-Engine` (public), default branch
+  `main`. Next: **S1 — core domain types**.
+
 ## Changelog
 
 - 2026-06-19 — S0 expanded from the parent blueprint. Adjustments vs parent:

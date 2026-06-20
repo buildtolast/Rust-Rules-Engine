@@ -4,7 +4,9 @@
 
 set -e
 
-COMPOSE_FILE="$(cd "$(dirname "$0")" && pwd)/docker-compose.yml"
+DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_FILE="$DEPLOY_DIR/docker-compose.yml"
+COMPOSE_OBS="$DEPLOY_DIR/docker-compose.observability.yml"
 
 # ── Default port exports ──────────────────────────────────────────────────────
 export REDPANDA_PORT=${REDPANDA_PORT:-19092}
@@ -15,6 +17,7 @@ export POSTGRES_PORT=${POSTGRES_PORT:-5432}
 export APP_PORT=${APP_PORT:-8080}
 export FRONTEND_PORT=${FRONTEND_PORT:-3000}
 export SRE_PORT=${SRE_PORT:-8088}
+export SIGNOZ_PORT=${SIGNOZ_PORT:-3301}
 
 # ── Connection overrides (skip the matching container when set) ───────────────
 KAFKA_BROKERS_OVERRIDE=${KAFKA_BROKERS:-}
@@ -49,6 +52,7 @@ FORCE_REBUILD=false
 FAST_MODE=false        # --fast: skip build, just re-up containers
 FOLLOW_LOGS=false
 DOWN_ONLY=false
+OBS_MODE=false         # --obs:  also start SigNoz observability overlay
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -56,6 +60,7 @@ while [[ "$#" -gt 0 ]]; do
         --fast|-f)       FAST_MODE=true ;;
         --logs|-l)       FOLLOW_LOGS=true ;;
         --down|-d)       DOWN_ONLY=true ;;
+        --obs|-o)        OBS_MODE=true ;;
         --help|-h)
             echo "Usage: ./deploy/run.sh [OPTIONS]"
             echo ""
@@ -64,6 +69,7 @@ while [[ "$#" -gt 0 ]]; do
             echo "  --fast,    -f   Skip build, restart containers only"
             echo "  --logs,    -l   Follow logs after starting the stack"
             echo "  --down,    -d   Tear down the stack and exit"
+            echo "  --obs,     -o   Also start SigNoz observability stack (OTEL collector + SigNoz UI)"
             echo "  --help,    -h   Show this help message"
             echo ""
             echo "Port overrides (auto-incremented if already in use):"
@@ -75,6 +81,7 @@ while [[ "$#" -gt 0 ]]; do
             echo "  APP_PORT             Rules Engine API port         (default: 8080)"
             echo "  FRONTEND_PORT        Frontend UI port              (default: 3000)"
             echo "  SRE_PORT             SRE agent port                (default: 8088)"
+            echo "  SIGNOZ_PORT          SigNoz UI port                (default: 3301)  [--obs only]"
             echo ""
             echo "External service overrides (skips starting the matching container):"
             echo "  KAFKA_BROKERS   External Kafka broker  (e.g., localhost:9092)"
@@ -85,6 +92,7 @@ while [[ "$#" -gt 0 ]]; do
             echo "  ./deploy/run.sh                        # cached build (default)"
             echo "  ./deploy/run.sh --rebuild --logs       # clean build, then follow logs"
             echo "  ./deploy/run.sh --fast                 # restart without rebuilding"
+            echo "  ./deploy/run.sh --obs                  # include SigNoz tracing UI"
             echo "  FRONTEND_PORT=9000 ./deploy/run.sh"
             exit 0
             ;;
@@ -105,6 +113,15 @@ else
     DC="docker-compose"
 fi
 
+# dc_run <args...> — wraps $DC with the correct compose files.
+dc_run() {
+    if [ "$OBS_MODE" = true ]; then
+        dc_run -f "$COMPOSE_OBS" "$@"
+    else
+        dc_run "$@"
+    fi
+}
+
 # Load UNSLOTH_API_KEY from ~/.zshrc if not already in the environment.
 if [ -z "${UNSLOTH_API_KEY:-}" ] && [ -f "$HOME/.zshrc" ]; then
     UNSLOTH_API_KEY="$(source "$HOME/.zshrc" 2>/dev/null; echo "${UNSLOTH_API_KEY:-}")"
@@ -113,7 +130,7 @@ fi
 
 # ── Teardown ──────────────────────────────────────────────────────────────────
 echo "🛑 Stopping existing services..."
-$DC -f "$COMPOSE_FILE" down --remove-orphans
+dc_run down --remove-orphans
 
 if [ "$DOWN_ONLY" = true ]; then
     echo "✅ Stack torn down."
@@ -129,6 +146,9 @@ find_free_port "$POSTGRES_PORT"       "Postgres";          export POSTGRES_PORT=
 find_free_port "$APP_PORT"            "Rules Engine";      export APP_PORT="$FREE_PORT"
 find_free_port "$FRONTEND_PORT"       "Frontend";          export FRONTEND_PORT="$FREE_PORT"
 find_free_port "$SRE_PORT"            "SRE agent";         export SRE_PORT="$FREE_PORT"
+if [ "$OBS_MODE" = true ]; then
+    find_free_port "$SIGNOZ_PORT" "SigNoz UI"; export SIGNOZ_PORT="$FREE_PORT"
+fi
 
 # ── Log external overrides ────────────────────────────────────────────────────
 [ -n "$KAFKA_BROKERS_OVERRIDE" ]    && echo "🌐 Using external Kafka:      $KAFKA_BROKERS_OVERRIDE"
@@ -144,19 +164,23 @@ echo "🐘 Postgres:          localhost:$POSTGRES_PORT"
 echo "⚙️  Rules Engine API:  http://localhost:$APP_PORT"
 echo "🖥️  Frontend UI:       http://localhost:$FRONTEND_PORT"
 echo "🛡️  SRE Agent:         http://localhost:$SRE_PORT"
+if [ "$OBS_MODE" = true ]; then
+echo "🔭 SigNoz UI:          http://localhost:$SIGNOZ_PORT"
+echo "   OTEL gRPC:          localhost:4317"
+fi
 echo "----------------------------------------------------------"
 
 # ── Build & start ─────────────────────────────────────────────────────────────
 if [ "$FORCE_REBUILD" = true ]; then
     echo "🔄 Forcing a clean rebuild (--no-cache)..."
-    $DC -f "$COMPOSE_FILE" build --no-cache
-    $DC -f "$COMPOSE_FILE" up -d --remove-orphans
+    dc_run build --no-cache
+    dc_run up -d --remove-orphans
 elif [ "$FAST_MODE" = true ]; then
     echo "⚡ Fast mode — skipping build, restarting containers..."
-    $DC -f "$COMPOSE_FILE" up -d --remove-orphans
+    dc_run up -d --remove-orphans
 else
     echo "🔍 Cache-aware build (use --rebuild for a clean build)..."
-    $DC -f "$COMPOSE_FILE" up -d --build --remove-orphans
+    dc_run up -d --build --remove-orphans
 fi
 
 # ── Kafka topic setup ─────────────────────────────────────────────────────────
@@ -176,6 +200,9 @@ fi
 # ── Wait for healthy ──────────────────────────────────────────────────────────
 echo "⏳ Waiting for all services to become healthy..."
 SERVICES="rre-redpanda-0 rre-redpanda-1 rre-redpanda-2 rre-clickhouse rre-postgres rre-app-1 rre-app-2 rre-sre-agent-1 rre-sre-agent-2"
+if [ "$OBS_MODE" = true ]; then
+    SERVICES="$SERVICES rre-otel-collector rre-signoz"
+fi
 MAX_ATTEMPTS=90
 ATTEMPT=1
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
@@ -208,11 +235,18 @@ echo ""
 echo "🖥️  Frontend UI:    http://localhost:$FRONTEND_PORT"
 echo "⚙️  Rules Engine:   http://localhost:$APP_PORT/health"
 echo "🛡️  SRE Agent:      http://localhost:$SRE_PORT"
+if [ "$OBS_MODE" = true ]; then
+echo "🔭 SigNoz UI:      http://localhost:$SIGNOZ_PORT"
+fi
+if [ "$OBS_MODE" = true ]; then
+echo "🔍 Logs:           $DC -f $COMPOSE_FILE -f $COMPOSE_OBS logs -f"
+else
 echo "🔍 Logs:           $DC -f $COMPOSE_FILE logs -f"
+fi
 echo "🛑 Teardown:       ./deploy/run.sh --down"
 echo "----------------------------------------------------------"
 
 if [ "$FOLLOW_LOGS" = true ]; then
     echo "📜 Following logs (Ctrl+C to detach)..."
-    $DC -f "$COMPOSE_FILE" logs -f
+    dc_run logs -f
 fi

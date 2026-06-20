@@ -56,7 +56,7 @@ services:
       ClickHouseUrl: http://admin:${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}@signoz-clickhouse:8123
       SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
     ports:
-      - "3301:3301"
+      - "${SIGNOZ_PORT:-3301}:3301"
     volumes:
       - rre-signoz-data:/var/lib/signoz
     depends_on:

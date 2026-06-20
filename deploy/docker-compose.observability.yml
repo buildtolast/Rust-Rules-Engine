@@ -4,8 +4,6 @@
 # SigNoz UI: http://localhost:3301
 # Switch backend: change OTEL_EXPORTER_OTLP_ENDPOINT in deploy/docker-compose.yml
 
-name: rre-obs
-
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.108.0
@@ -18,8 +16,6 @@ services:
       - "4318:4318"
     depends_on:
       - signoz-otelcollector
-    networks:
-      - rre_default
 
   signoz-clickhouse:
     image: clickhouse/clickhouse-server:24.1.2-alpine
@@ -34,19 +30,43 @@ services:
       resources:
         limits:
           memory: 2G
-    networks:
-      - rre_default
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "admin",
+             "--password", "${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}",
+             "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  signoz-schema-init:
+    image: clickhouse/clickhouse-server:24.1.2-alpine
+    container_name: rre-signoz-schema-init
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        clickhouse-client --host signoz-clickhouse \
+          --user admin \
+          --password "${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}" \
+          --query "CREATE DATABASE IF NOT EXISTS signoz_traces"
+        clickhouse-client --host signoz-clickhouse \
+          --user admin \
+          --password "${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}" \
+          --query "CREATE DATABASE IF NOT EXISTS signoz_logs"
+        echo "Schema init done"
 
   signoz-otelcollector:
     image: signoz/signoz-otel-collector:v0.144.5
     container_name: rre-signoz-otelcollector
-    environment:
-      CLICKHOUSE_URL: tcp://signoz-clickhouse:9000
+    command:
+      - "--config=/etc/otel/config.yaml"
+    volumes:
+      - ./signoz-otelcollector-config.yaml:/etc/otel/config.yaml:ro
     depends_on:
-      signoz-clickhouse:
-        condition: service_started
-    networks:
-      - rre_default
+      signoz-schema-init:
+        condition: service_completed_successfully
 
   signoz:
     image: signoz/signoz:v0.129.0
@@ -62,14 +82,7 @@ services:
     depends_on:
       - signoz-clickhouse
       - signoz-otelcollector
-    networks:
-      - rre_default
 
 volumes:
   rre-signoz-ch-data:
   rre-signoz-data:
-
-networks:
-  rre_default:
-    external: true
-    name: rre_default

@@ -146,6 +146,7 @@ impl AuditWriter {
     }
 
     /// Buffer a batch of records; flushes automatically when the buffer is full.
+    #[tracing::instrument(level = "debug", skip(self, recs), fields(row_count = recs.len()))]
     pub async fn write_batch(&mut self, recs: &[AuditRecord]) -> Result<(), Error> {
         for rec in recs {
             self.buffer.push(AuditRow::from_record(rec));
@@ -156,6 +157,7 @@ impl AuditWriter {
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip(self), fields(row_count = self.buffer.len()))]
     pub async fn flush(&mut self) -> Result<(), Error> {
         if self.buffer.is_empty() {
             return Ok(());

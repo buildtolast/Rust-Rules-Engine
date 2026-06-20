@@ -87,10 +87,12 @@ impl RuleRepository {
         &self.pool
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn ping(&self) -> bool {
         sqlx::query("SELECT 1").execute(&self.pool).await.is_ok()
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn list(&self) -> Result<Vec<Rule>> {
         let mut qb = QueryBuilder::new("SELECT ");
         qb.push(RULE_COLS);
@@ -99,6 +101,7 @@ impl RuleRepository {
         Ok(rows.into_iter().map(Rule::from).collect())
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get(&self, id: &str) -> Result<Option<Rule>> {
         let mut qb = QueryBuilder::new("SELECT ");
         qb.push(RULE_COLS);
@@ -111,6 +114,7 @@ impl RuleRepository {
         Ok(row.map(Rule::from))
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn create(&self, input: &RuleInput) -> Result<Rule> {
         let mut qb = QueryBuilder::new("INSERT INTO rules (description, expression, target_topic, enabled) VALUES ($1, $2, $3, $4) RETURNING ");
         qb.push(RULE_COLS);
@@ -125,6 +129,7 @@ impl RuleRepository {
         Ok(Rule::from(row))
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn update(&self, id: &str, input: &RuleInput) -> Result<Option<Rule>> {
         let mut qb = QueryBuilder::new("UPDATE rules SET description=$2, expression=$3, target_topic=$4, enabled=$5, version=version+1, updated_at=now() WHERE id=$1 RETURNING ");
         qb.push(RULE_COLS);
@@ -140,6 +145,7 @@ impl RuleRepository {
         Ok(row.map(Rule::from))
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn delete(&self, id: &str) -> Result<bool> {
         let result = query("DELETE FROM rules WHERE id = $1")
             .bind(id)

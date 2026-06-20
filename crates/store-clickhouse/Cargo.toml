@@ -11,6 +11,7 @@ rules-core = { path = "../core" }
 serde = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

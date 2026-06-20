@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RRE Infrastructure Diagram</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; padding: 24px; }
+h1 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+p.sub { font-size: 12px; color: #64748b; margin-bottom: 20px; }
+.tabs { display:flex; gap:0; padding: 14px 18px 0; border-bottom: 2px solid #e2e8f0; background: #fff; border-radius: 10px 10px 0 0; }
+.tab { padding: 8px 22px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border: 2px solid transparent; border-bottom: none; color: #64748b; transition: all .15s; }
+.tab.active { background: #fff; border-color: #e2e8f0; color: #4f46e5; }
+.panel { display: none; padding: 20px 18px; background: #fff; border-radius: 0 0 10px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.panel.active { display: block; }
+svg { display: block; width: 100%; height: auto; }
+.t-title  { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; }
+.t-sub    { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10.5px; }
+.t-mono   { font-family: 'SF Mono', Consolas, monospace; font-size: 9.5px; }
+.t-label  { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; }
+.t-tier   { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.fill-kafka { fill: #fffbeb; } .stroke-kafka { stroke: #f59e0b; }
+.fill-app   { fill: #f0fdf4; } .stroke-app   { stroke: #22c55e; }
+.fill-sre   { fill: #faf5ff; } .stroke-sre   { stroke: #a855f7; }
+.fill-db    { fill: #eff6ff; } .stroke-db    { stroke: #6366f1; }
+.fill-fe    { fill: #eff6ff; } .stroke-fe    { stroke: #3b82f6; }
+.fill-obs   { fill: #fff1f2; } .stroke-obs   { stroke: #f43f5e; }
+.fill-ext   { fill: #f8fafc; } .stroke-ext   { stroke: #94a3b8; }
+.node-box   { rx: 8; ry: 8; stroke-width: 1.5; }
+.group-box  { rx: 10; ry: 10; stroke-width: 1.5; stroke-dasharray: 5 3; fill: none; }
+.flow-hot   { stroke: #ef4444; stroke-width: 2.5; fill: none; }
+.flow-main  { stroke: #94a3b8; stroke-width: 1.8; fill: none; }
+.flow-dash  { stroke: #cbd5e1; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.flow-otel  { stroke: #f43f5e; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+.arrow-head-gray { fill: #94a3b8; }
+.arrow-head-red  { fill: #ef4444; }
+.arrow-head-pink { fill: #f43f5e; }
+.legend { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; }
+.leg { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #475569; }
+.leg-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<h1>Rust Rules Engine — Infrastructure</h1>
+<p class="sub">Switch tabs to compare local Docker Compose setup with the equivalent AWS deployment.</p>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('docker')">Docker Compose (local)</div>
+  <div class="tab" onclick="show('aws')">AWS deployment</div>
+</div>
+
+<div id="docker" class="panel active">
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#f59e0b;border:1.5px solid #d97706"></div>Kafka (Redpanda)</div>
+    <div class="leg"><div class="leg-dot" style="background:#22c55e;border:1.5px solid #16a34a"></div>Rules Engine</div>
+    <div class="leg"><div class="leg-dot" style="background:#a855f7;border:1.5px solid #9333ea"></div>SRE Agent</div>
+    <div class="leg"><div class="leg-dot" style="background:#6366f1;border:1.5px solid #4f46e5"></div>Databases</div>
+    <div class="leg"><div class="leg-dot" style="background:#3b82f6;border:1.5px solid #2563eb"></div>Frontend</div>
+    <div class="leg"><div class="leg-dot" style="background:#f43f5e;border:1.5px solid #e11d48"></div>Observability (--obs)</div>
+    <div class="leg"><svg width="30" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#ef4444" stroke-width="2.5"/><polygon points="24,1 30,5 24,9" fill="#ef4444"/></svg>&nbsp;Hot event path</div>
+    <div class="leg"><svg width="30" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 3"/><polygon points="22,2 28,5 22,8" fill="#cbd5e1"/></svg>&nbsp;Optional / async</div>
+  </div>
+  <svg viewBox="0 0 1060 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="dg-gray" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-gray"/></marker>
+      <marker id="dg-red"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-red"/></marker>
+      <marker id="dg-pink" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-pink"/></marker>
+    </defs>
+    <rect x="14" y="14" width="756" height="612" rx="12" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="8 5"/>
+    <text x="32" y="32" class="t-tier" fill="#94a3b8">rre_default  ·  Docker bridge network</text>
+    <rect x="282" y="44" width="220" height="42" rx="21" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="392" y="62" text-anchor="middle" class="t-title" fill="#475569">Browser / curl</text>
+    <text x="392" y="78" text-anchor="middle" class="t-mono" fill="#94a3b8">localhost:3000</text>
+    <line x1="392" y1="86" x2="392" y2="116" class="flow-main" marker-end="url(#dg-gray)"/>
+    <rect x="88" y="118" width="610" height="100" rx="8" class="fill-fe node-box stroke-fe"/>
+    <text x="393" y="142" text-anchor="middle" class="t-title" fill="#1e40af">frontend  ·  nginx :80  →  host :3000</text>
+    <text x="393" y="160" text-anchor="middle" class="t-sub" fill="#3b82f6">React SPA  ·  serves static build</text>
+    <text x="260" y="180" text-anchor="middle" class="t-mono" fill="#6b7280">/api/*  →  app:8080</text>
+    <text x="530" y="180" text-anchor="middle" class="t-mono" fill="#6b7280">/sre/*  →  sre-agent:8088</text>
+    <line x1="393" y1="165" x2="393" y2="210" stroke="#bfdbfe" stroke-width="1" stroke-dasharray="4 3"/>
+    <line x1="280" y1="218" x2="220" y2="254" class="flow-main" marker-end="url(#dg-gray)"/>
+    <line x1="510" y1="218" x2="570" y2="254" class="flow-main" marker-end="url(#dg-gray)"/>
+    <rect x="28" y="258" width="450" height="170" rx="10" class="group-box stroke-app"/>
+    <text x="253" y="278" text-anchor="middle" class="t-label" fill="#15803d">rules-engine  ·  ×2 replicas</text>
+    <rect x="44" y="288" width="196" height="128" rx="7" class="fill-app node-box stroke-app"/>
+    <text x="142" y="310" text-anchor="middle" class="t-title" fill="#166534">app-1</text>
+    <text x="142" y="328" text-anchor="middle" class="t-sub" fill="#16a34a">axum HTTP :8080</text>
+    <text x="142" y="344" text-anchor="middle" class="t-sub" fill="#16a34a">Kafka consumer (EOS)</text>
+    <text x="142" y="360" text-anchor="middle" class="t-sub" fill="#16a34a">rayon CEL evaluator</text>
+    <text x="142" y="376" text-anchor="middle" class="t-sub" fill="#16a34a">ClickHouse batch writer</text>
+    <text x="142" y="393" text-anchor="middle" class="t-mono" fill="#86efac">txn-id = $HOSTNAME</text>
+    <rect x="258" y="288" width="196" height="128" rx="7" class="fill-app node-box stroke-app"/>
+    <text x="356" y="310" text-anchor="middle" class="t-title" fill="#166534">app-2</text>
+    <text x="356" y="328" text-anchor="middle" class="t-sub" fill="#16a34a">axum HTTP :8080</text>
+    <text x="356" y="344" text-anchor="middle" class="t-sub" fill="#16a34a">Kafka consumer (EOS)</text>
+    <text x="356" y="360" text-anchor="middle" class="t-sub" fill="#16a34a">rayon CEL evaluator</text>
+    <text x="356" y="376" text-anchor="middle" class="t-sub" fill="#16a34a">ClickHouse batch writer</text>
+    <text x="356" y="393" text-anchor="middle" class="t-mono" fill="#86efac">txn-id = $HOSTNAME</text>
+    <rect x="498" y="258" width="260" height="170" rx="10" class="group-box stroke-sre"/>
+    <text x="628" y="278" text-anchor="middle" class="t-label" fill="#7c3aed">sre-agent  ·  ×2 replicas</text>
+    <rect x="514" y="288" width="106" height="128" rx="7" class="fill-sre node-box stroke-sre"/>
+    <text x="567" y="310" text-anchor="middle" class="t-title" fill="#6d28d9">sre-1</text>
+    <text x="567" y="328" text-anchor="middle" class="t-sub" fill="#7c3aed">bollard</text>
+    <text x="567" y="344" text-anchor="middle" class="t-sub" fill="#7c3aed">Docker API</text>
+    <text x="567" y="360" text-anchor="middle" class="t-sub" fill="#7c3aed">log tail</text>
+    <text x="567" y="376" text-anchor="middle" class="t-sub" fill="#7c3aed">LLM analysis</text>
+    <text x="567" y="393" text-anchor="middle" class="t-mono" fill="#c4b5fd">:8088</text>
+    <rect x="638" y="288" width="106" height="128" rx="7" class="fill-sre node-box stroke-sre"/>
+    <text x="691" y="310" text-anchor="middle" class="t-title" fill="#6d28d9">sre-2</text>
+    <text x="691" y="328" text-anchor="middle" class="t-sub" fill="#7c3aed">bollard</text>
+    <text x="691" y="344" text-anchor="middle" class="t-sub" fill="#7c3aed">Docker API</text>
+    <text x="691" y="360" text-anchor="middle" class="t-sub" fill="#7c3aed">log tail</text>
+    <text x="691" y="376" text-anchor="middle" class="t-sub" fill="#7c3aed">LLM analysis</text>
+    <text x="691" y="393" text-anchor="middle" class="t-mono" fill="#c4b5fd">:8088</text>
+    <line x1="180" y1="416" x2="180" y2="462" class="flow-hot" marker-end="url(#dg-red)"/>
+    <text x="195" y="443" class="t-label" fill="#ef4444">consume</text>
+    <line x1="340" y1="416" x2="340" y2="462" class="flow-main" marker-end="url(#dg-gray)"/>
+    <text x="354" y="443" class="t-label" fill="#64748b">LISTEN</text>
+    <path d="M 460 416 Q 460 440 510 462" class="flow-main" fill="none" marker-end="url(#dg-gray)"/>
+    <text x="480" y="445" class="t-label" fill="#64748b">audit</text>
+    <line x1="600" y1="416" x2="586" y2="462" class="flow-main" marker-end="url(#dg-gray)"/>
+    <text x="614" y="443" class="t-label" fill="#64748b">findings</text>
+    <path d="M 216 490 Q 310 450 356 416" class="flow-hot" fill="none" marker-end="url(#dg-red)"/>
+    <text x="286" y="448" text-anchor="middle" class="t-label" fill="#ef4444">produce</text>
+    <rect x="28" y="464" width="268" height="148" rx="8" class="fill-kafka node-box stroke-kafka"/>
+    <text x="162" y="488" text-anchor="middle" class="t-title" fill="#92400e">Redpanda cluster  ·  3 brokers</text>
+    <text x="162" y="506" text-anchor="middle" class="t-sub" fill="#b45309">redpanda-0 :19092  :9644  (host)</text>
+    <text x="162" y="522" text-anchor="middle" class="t-sub" fill="#b45309">redpanda-1  redpanda-2  (internal)</text>
+    <line x1="48" y1="534" x2="278" y2="534" stroke="#fde68a" stroke-width="1"/>
+    <text x="162" y="550" text-anchor="middle" class="t-sub" fill="#b45309">source-events  →  target-events</text>
+    <text x="162" y="566" text-anchor="middle" class="t-sub" fill="#b45309">6 partitions  ·  RF=3  ·  EOS</text>
+    <text x="162" y="582" text-anchor="middle" class="t-mono" fill="#d97706">redpanda-init creates topics (one-shot)</text>
+    <rect x="312" y="464" width="185" height="148" rx="8" class="fill-db node-box stroke-db"/>
+    <text x="404" y="488" text-anchor="middle" class="t-title" fill="#3730a3">PostgreSQL</text>
+    <text x="404" y="506" text-anchor="middle" class="t-sub" fill="#4338ca">primary  +  hot standby</text>
+    <line x1="330" y1="516" x2="478" y2="516" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="404" y="532" text-anchor="middle" class="t-sub" fill="#4338ca">rules table</text>
+    <text x="404" y="548" text-anchor="middle" class="t-sub" fill="#4338ca">NOTIFY trigger</text>
+    <text x="404" y="564" text-anchor="middle" class="t-sub" fill="#4338ca">→ pipeline hot-reload</text>
+    <text x="404" y="582" text-anchor="middle" class="t-mono" fill="#6366f1">host :5432  ·  streaming replica</text>
+    <rect x="512" y="464" width="248" height="148" rx="8" class="fill-db node-box stroke-db"/>
+    <text x="636" y="488" text-anchor="middle" class="t-title" fill="#3730a3">ClickHouse</text>
+    <text x="636" y="506" text-anchor="middle" class="t-sub" fill="#4338ca">audit + analytics + SRE store</text>
+    <line x1="530" y1="516" x2="742" y2="516" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="636" y="532" text-anchor="middle" class="t-sub" fill="#4338ca">audits  (ReplacingMergeTree)</text>
+    <text x="636" y="548" text-anchor="middle" class="t-sub" fill="#4338ca">agg_rule_hourly  (SumMT + MV)</text>
+    <text x="636" y="564" text-anchor="middle" class="t-sub" fill="#4338ca">sre_observations  ·  sre_outages</text>
+    <text x="636" y="582" text-anchor="middle" class="t-mono" fill="#6366f1">host :8123 HTTP  ·  :9000 TCP</text>
+    <line x1="757" y1="352" x2="812" y2="352" class="flow-dash" marker-end="url(#dg-pink)"/>
+    <rect x="814" y="316" width="224" height="84" rx="8" class="fill-ext node-box stroke-ext"/>
+    <text x="834" y="340" class="t-label" fill="#475569">Host machine  (external)</text>
+    <line x1="834" y1="348" x2="1020" y2="348" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="926" y="365" text-anchor="middle" class="t-title" fill="#334155">Unsloth Studio</text>
+    <text x="926" y="382" text-anchor="middle" class="t-sub" fill="#64748b">host.docker.internal:8888</text>
+    <text x="926" y="396" text-anchor="middle" class="t-mono" fill="#94a3b8">not containerised</text>
+    <path d="M 478 342 Q 790 342 812 430" class="flow-otel" fill="none" marker-end="url(#dg-pink)"/>
+    <path d="M 757 370 Q 800 370 812 432" class="flow-otel" fill="none" marker-end="url(#dg-pink)"/>
+    <text x="810" y="398" class="t-label" fill="#f43f5e">OTEL spans</text>
+    <rect x="814" y="422" width="224" height="192" rx="10" class="stroke-obs" fill="#fff1f2" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text x="926" y="444" text-anchor="middle" class="t-label" fill="#be123c">--obs overlay</text>
+    <rect x="828" y="452" width="196" height="46" rx="6" fill="#fecdd3" stroke="#f43f5e" stroke-width="1.2"/>
+    <text x="926" y="470" text-anchor="middle" class="t-title" fill="#9f1239">OTEL Collector</text>
+    <text x="926" y="486" text-anchor="middle" class="t-mono" fill="#be123c">:4317 gRPC  ·  :4318 HTTP</text>
+    <line x1="926" y1="498" x2="926" y2="510" class="flow-main" marker-end="url(#dg-gray)"/>
+    <rect x="828" y="512" width="196" height="40" rx="6" fill="#fda4af" stroke="#f43f5e" stroke-width="1.2"/>
+    <text x="926" y="528" text-anchor="middle" class="t-title" fill="#9f1239">SigNoz OTEL Collector</text>
+    <text x="926" y="544" text-anchor="middle" class="t-mono" fill="#9f1239">→ signoz-clickhouse:9000</text>
+    <line x1="926" y1="552" x2="926" y2="562" class="flow-main" marker-end="url(#dg-gray)"/>
+    <rect x="828" y="564" width="196" height="42" rx="6" fill="#e11d48" stroke="#be123c" stroke-width="1.2"/>
+    <text x="926" y="582" text-anchor="middle" class="t-title" fill="#fff">SigNoz UI</text>
+    <text x="926" y="598" text-anchor="middle" class="t-mono" fill="#fecdd3">signoz:v0.129.0  ·  host :3301</text>
+  </svg>
+</div>
+
+<div id="aws" class="panel">
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#f59e0b;border:1.5px solid #d97706"></div>Managed streaming</div>
+    <div class="leg"><div class="leg-dot" style="background:#22c55e;border:1.5px solid #16a34a"></div>Compute (ECS Fargate)</div>
+    <div class="leg"><div class="leg-dot" style="background:#a855f7;border:1.5px solid #9333ea"></div>SRE (ECS Fargate)</div>
+    <div class="leg"><div class="leg-dot" style="background:#6366f1;border:1.5px solid #4f46e5"></div>Managed databases</div>
+    <div class="leg"><div class="leg-dot" style="background:#3b82f6;border:1.5px solid #2563eb"></div>CDN / edge</div>
+    <div class="leg"><div class="leg-dot" style="background:#f43f5e;border:1.5px solid #e11d48"></div>Observability</div>
+  </div>
+  <svg viewBox="0 0 1060 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="aw-gray" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-gray"/></marker>
+      <marker id="aw-red"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-red"/></marker>
+      <marker id="aw-pink" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" class="arrow-head-pink"/></marker>
+    </defs>
+    <rect x="14" y="14" width="756" height="612" rx="12" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="8 5"/>
+    <text x="32" y="32" class="t-tier" fill="#94a3b8">AWS VPC  ·  private subnets (unless noted)</text>
+    <rect x="258" y="44" width="270" height="42" rx="21" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="393" y="62" text-anchor="middle" class="t-title" fill="#475569">Internet  /  end users</text>
+    <text x="393" y="78" text-anchor="middle" class="t-mono" fill="#94a3b8">public HTTPS</text>
+    <line x1="393" y1="86" x2="393" y2="116" class="flow-main" marker-end="url(#aw-gray)"/>
+    <rect x="88" y="118" width="610" height="90" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="393" y="142" text-anchor="middle" class="t-title" fill="#1e40af">CloudFront  +  S3  (React SPA)</text>
+    <text x="393" y="160" text-anchor="middle" class="t-sub" fill="#3b82f6">static assets served from CDN edge  ·  /api/* and /sre/* proxied to ALB</text>
+    <line x1="250" y1="172" x2="250" y2="200" stroke="#bfdbfe" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="200" y="185" text-anchor="middle" class="t-mono" fill="#6b7280">→ ALB /api/*</text>
+    <text x="548" y="185" text-anchor="middle" class="t-mono" fill="#6b7280">→ ALB /sre/*</text>
+    <line x1="280" y1="208" x2="220" y2="248" class="flow-main" marker-end="url(#aw-gray)"/>
+    <line x1="510" y1="208" x2="570" y2="248" class="flow-main" marker-end="url(#aw-gray)"/>
+    <rect x="28" y="252" width="450" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="253" y="276" text-anchor="middle" class="t-title" fill="#1e40af">Application Load Balancer  (internal)</text>
+    <text x="253" y="294" text-anchor="middle" class="t-sub" fill="#3b82f6">routes by path to target groups below</text>
+    <line x1="180" y1="312" x2="180" y2="348" class="flow-main" marker-end="url(#aw-gray)"/>
+    <rect x="28" y="350" width="450" height="150" rx="10" class="group-box stroke-app"/>
+    <text x="253" y="370" text-anchor="middle" class="t-label" fill="#15803d">ECS Fargate  ·  rules-engine service</text>
+    <rect x="44" y="378" width="196" height="112" rx="7" class="fill-app node-box stroke-app"/>
+    <text x="142" y="398" text-anchor="middle" class="t-title" fill="#166534">task-1</text>
+    <text x="142" y="416" text-anchor="middle" class="t-sub" fill="#16a34a">axum HTTP :8080</text>
+    <text x="142" y="432" text-anchor="middle" class="t-sub" fill="#16a34a">MSK consumer (EOS)</text>
+    <text x="142" y="448" text-anchor="middle" class="t-sub" fill="#16a34a">rayon CEL evaluator</text>
+    <text x="142" y="464" text-anchor="middle" class="t-mono" fill="#86efac">unique TRANSACTIONAL_ID</text>
+    <text x="142" y="480" text-anchor="middle" class="t-mono" fill="#86efac">per task (required for EOS)</text>
+    <rect x="258" y="378" width="196" height="112" rx="7" class="fill-app node-box stroke-app"/>
+    <text x="356" y="398" text-anchor="middle" class="t-title" fill="#166534">task-2 … N</text>
+    <text x="356" y="416" text-anchor="middle" class="t-sub" fill="#16a34a">auto-scales on lag metric</text>
+    <text x="356" y="432" text-anchor="middle" class="t-sub" fill="#16a34a">max tasks = partition count</text>
+    <text x="356" y="448" text-anchor="middle" class="t-sub" fill="#16a34a">(currently 6)</text>
+    <text x="356" y="464" text-anchor="middle" class="t-sub" fill="#16a34a">CloudWatch alarm → ASG</text>
+    <rect x="498" y="252" width="260" height="248" rx="10" class="group-box stroke-sre"/>
+    <text x="628" y="272" text-anchor="middle" class="t-label" fill="#7c3aed">ECS Fargate  ·  sre-agent service</text>
+    <rect x="514" y="286" width="108" height="200" rx="7" class="fill-sre node-box stroke-sre"/>
+    <text x="568" y="308" text-anchor="middle" class="t-title" fill="#6d28d9">sre-1</text>
+    <text x="568" y="328" text-anchor="middle" class="t-sub" fill="#7c3aed">ECS list-tasks API</text>
+    <text x="568" y="346" text-anchor="middle" class="t-sub" fill="#7c3aed">(replaces bollard)</text>
+    <text x="568" y="366" text-anchor="middle" class="t-sub" fill="#7c3aed">CW Logs get-events</text>
+    <text x="568" y="384" text-anchor="middle" class="t-sub" fill="#7c3aed">(replaces docker logs)</text>
+    <text x="568" y="404" text-anchor="middle" class="t-sub" fill="#7c3aed">Bedrock LLM API</text>
+    <text x="568" y="422" text-anchor="middle" class="t-sub" fill="#7c3aed">(replaces Unsloth)</text>
+    <text x="568" y="442" text-anchor="middle" class="t-mono" fill="#c4b5fd">:8088  ·  IAM role auth</text>
+    <text x="568" y="460" text-anchor="middle" class="t-mono" fill="#c4b5fd">no Docker socket needed</text>
+    <rect x="638" y="286" width="106" height="200" rx="7" class="fill-sre node-box stroke-sre"/>
+    <text x="691" y="308" text-anchor="middle" class="t-title" fill="#6d28d9">sre-2</text>
+    <text x="691" y="328" text-anchor="middle" class="t-sub" fill="#7c3aed">same config</text>
+    <text x="691" y="348" text-anchor="middle" class="t-sub" fill="#7c3aed">findings deduped</text>
+    <text x="691" y="368" text-anchor="middle" class="t-sub" fill="#7c3aed">in ClickHouse</text>
+    <text x="691" y="388" text-anchor="middle" class="t-sub" fill="#7c3aed">both replicas</text>
+    <text x="691" y="408" text-anchor="middle" class="t-sub" fill="#7c3aed">return same</text>
+    <text x="691" y="428" text-anchor="middle" class="t-sub" fill="#7c3aed">data from CH</text>
+    <line x1="180" y1="500" x2="130" y2="536" class="flow-hot" marker-end="url(#aw-red)"/>
+    <text x="100" y="522" class="t-label" fill="#ef4444">consume</text>
+    <line x1="300" y1="500" x2="340" y2="536" class="flow-main" marker-end="url(#aw-gray)"/>
+    <text x="316" y="522" class="t-label" fill="#64748b">LISTEN</text>
+    <line x1="420" y1="500" x2="500" y2="536" class="flow-main" marker-end="url(#aw-gray)"/>
+    <text x="448" y="522" class="t-label" fill="#64748b">audit</text>
+    <line x1="565" y1="500" x2="580" y2="536" class="flow-main" marker-end="url(#aw-gray)"/>
+    <text x="592" y="522" class="t-label" fill="#64748b">findings</text>
+    <path d="M 175 558 Q 240 510 292 500" class="flow-hot" fill="none" marker-end="url(#aw-red)"/>
+    <text x="236" y="522" text-anchor="middle" class="t-label" fill="#ef4444">produce</text>
+    <rect x="28" y="538" width="248" height="84" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="152" y="560" text-anchor="middle" class="t-title" fill="#92400e">Amazon MSK</text>
+    <text x="152" y="578" text-anchor="middle" class="t-sub" fill="#b45309">or Redpanda Cloud</text>
+    <text x="152" y="594" text-anchor="middle" class="t-sub" fill="#b45309">same Kafka API  ·  EOS unchanged</text>
+    <text x="152" y="610" text-anchor="middle" class="t-mono" fill="#d97706">RF=3 across AZs  ·  IAM auth</text>
+    <rect x="294" y="538" width="190" height="84" rx="8" class="fill-db node-box stroke-db"/>
+    <text x="389" y="560" text-anchor="middle" class="t-title" fill="#3730a3">RDS PostgreSQL</text>
+    <text x="389" y="578" text-anchor="middle" class="t-sub" fill="#4338ca">Multi-AZ  ·  managed failover</text>
+    <text x="389" y="594" text-anchor="middle" class="t-sub" fill="#4338ca">rules table  +  NOTIFY trigger</text>
+    <text x="389" y="610" text-anchor="middle" class="t-mono" fill="#6366f1">:5432  private subnet</text>
+    <rect x="502" y="538" width="242" height="84" rx="8" class="fill-db node-box stroke-db"/>
+    <text x="623" y="560" text-anchor="middle" class="t-title" fill="#3730a3">ClickHouse Cloud</text>
+    <text x="623" y="578" text-anchor="middle" class="t-sub" fill="#4338ca">or self-hosted EC2  +  EBS</text>
+    <text x="623" y="594" text-anchor="middle" class="t-sub" fill="#4338ca">audits  ·  SRE observations</text>
+    <text x="623" y="610" text-anchor="middle" class="t-mono" fill="#6366f1">private HTTPS :8443</text>
+    <rect x="814" y="278" width="224" height="84" rx="8" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5"/>
+    <text x="834" y="302" class="t-label" fill="#6d28d9">Replaces Unsloth Studio</text>
+    <line x1="834" y1="310" x2="1020" y2="310" stroke="#e9d5ff" stroke-width="1"/>
+    <text x="926" y="328" text-anchor="middle" class="t-title" fill="#6d28d9">Amazon Bedrock</text>
+    <text x="926" y="346" text-anchor="middle" class="t-sub" fill="#7c3aed">or SageMaker endpoint</text>
+    <text x="926" y="360" text-anchor="middle" class="t-mono" fill="#c4b5fd">OpenAI-compat API</text>
+    <line x1="757" y1="340" x2="814" y2="334" class="flow-dash" marker-end="url(#aw-pink)"/>
+    <path d="M 478 416 Q 790 416 812 468" class="flow-otel" fill="none" marker-end="url(#aw-pink)"/>
+    <path d="M 757 400 Q 800 400 812 470" class="flow-otel" fill="none" marker-end="url(#aw-pink)"/>
+    <text x="820" y="458" class="t-label" fill="#f43f5e">OTEL spans</text>
+    <rect x="814" y="474" width="224" height="156" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text x="926" y="496" text-anchor="middle" class="t-label" fill="#be123c">Observability</text>
+    <rect x="828" y="504" width="196" height="44" rx="6" fill="#fecdd3" stroke="#f43f5e" stroke-width="1.2"/>
+    <text x="926" y="522" text-anchor="middle" class="t-title" fill="#9f1239">AWS X-Ray</text>
+    <text x="926" y="540" text-anchor="middle" class="t-mono" fill="#be123c">replaces SigNoz traces</text>
+    <rect x="828" y="558" width="196" height="44" rx="6" fill="#fda4af" stroke="#f43f5e" stroke-width="1.2"/>
+    <text x="926" y="576" text-anchor="middle" class="t-title" fill="#9f1239">CloudWatch</text>
+    <text x="926" y="594" text-anchor="middle" class="t-mono" fill="#9f1239">metrics  ·  logs  ·  ASG alarm</text>
+    <line x1="926" y1="548" x2="926" y2="558" class="flow-main" marker-end="url(#aw-gray)"/>
+    <text x="926" y="625" text-anchor="middle" class="t-mono" fill="#94a3b8">or: self-host SigNoz on ECS Fargate</text>
+  </svg>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['docker','aws'][i] === id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === id));
+}
+</script>
+</body>
+</html>

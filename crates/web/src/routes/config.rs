@@ -5,8 +5,6 @@ use crate::AppState;
 
 #[derive(Serialize)]
 pub struct RuntimeConfig {
-    // Simulator feature flags
-    pub max_simulation_count: usize,
     pub simulation_senders: usize,
     // Kafka / Pipeline
     pub source_topic: String,
@@ -21,7 +19,6 @@ pub struct RuntimeConfig {
 
 pub async fn get_config(State(s): State<AppState>) -> Json<RuntimeConfig> {
     Json(RuntimeConfig {
-        max_simulation_count: env_usize("MAX_SIMULATION_COUNT", 1_000_000),
         simulation_senders: env_usize("SIMULATION_SENDERS", 8),
         source_topic: s.source_topic.clone(),
         target_topic: env_str("TARGET_TOPIC", "target-events"),

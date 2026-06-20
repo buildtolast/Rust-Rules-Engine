@@ -13,9 +13,13 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import type { AnalyticsStats, TimeSeriesPoint } from './types';
+import type { AnalyticsStats, TimeSeriesPoint, Rule } from './types';
 
-const AnalyticsDashboard: React.FC = () => {
+interface Props {
+  rules: Rule[];
+}
+
+const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +32,14 @@ const AnalyticsDashboard: React.FC = () => {
   const [selectedRule, setSelectedRule] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  const ruleNameMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    rules.forEach(r => { if (r.id) map[r.id] = r.description; });
+    return map;
+  }, [rules]);
+
+  const ruleName = (id: string) => ruleNameMap[id] ?? id.slice(0, 8) + '…';
 
   const inFlightRef = useRef(false);
 
@@ -271,7 +283,9 @@ const AnalyticsDashboard: React.FC = () => {
                     
                     return (
                       <tr key={rs.ruleId} className={`hover:bg-gray-50/50 transition-colors ${selectedRule === rs.ruleId ? 'bg-indigo-50/50' : ''}`}>
-                        <td className="px-8 py-5 font-mono text-sm font-bold text-gray-700">{rs.ruleId}</td>
+                        <td className="px-8 py-5 text-sm font-bold text-gray-700 max-w-[220px]">
+                          <span className="block truncate" title={rs.ruleId}>{ruleName(rs.ruleId)}</span>
+                        </td>
                         <td className="px-8 py-5">
                           <div className="w-full bg-gray-100 rounded-full h-2.5 max-w-[120px]">
                             <div 
@@ -345,7 +359,7 @@ const AnalyticsDashboard: React.FC = () => {
                 >
                   <option value="all">All Rules (Aggregated)</option>
                   {(stats?.ruleStats || []).map(rs => (
-                    <option key={rs.ruleId} value={rs.ruleId}>{rs.ruleId}</option>
+                    <option key={rs.ruleId} value={rs.ruleId}>{ruleName(rs.ruleId)}</option>
                   ))}
                 </select>
               </div>
@@ -368,17 +382,21 @@ interface StatCardProps {
   bgColor: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, bgColor }) => (
-  <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5">
-    <div className={`w-14 h-14 ${bgColor} rounded-2xl flex items-center justify-center shadow-inner`}>
-      {icon}
+const StatCard: React.FC<StatCardProps> = ({ icon, label, value, bgColor }) => {
+  const formatted = value.toLocaleString();
+  const sizeClass = formatted.length > 11 ? 'text-xl' : formatted.length > 8 ? 'text-2xl' : 'text-3xl';
+  return (
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 min-w-0">
+      <div className={`w-14 h-14 flex-shrink-0 ${bgColor} rounded-2xl flex items-center justify-center shadow-inner`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{label}</p>
+        <h3 className={`${sizeClass} font-black text-gray-900 tabular-nums`}>{formatted}</h3>
+      </div>
     </div>
-    <div>
-      <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{label}</p>
-      <h3 className="text-3xl font-black text-gray-900">{value.toLocaleString()}</h3>
-    </div>
-  </div>
-);
+  );
+};
 
 interface PerformanceChartProps {
   data: TimeSeriesPoint[];

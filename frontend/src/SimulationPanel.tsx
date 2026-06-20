@@ -212,11 +212,11 @@ const SimulationPanel: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>
               <p className="text-gray-400 text-sm mb-1">Messages</p>
-              <p className="text-4xl font-black">{stats?.totalMessages.toLocaleString() || 0}</p>
+              <p className="text-2xl font-black tabular-nums">{stats?.totalMessages.toLocaleString() || 0}</p>
             </div>
             <div>
               <p className="text-gray-400 text-sm mb-1">Evaluations</p>
-              <p className="text-4xl font-black">{stats?.totalEvaluations.toLocaleString() || 0}</p>
+              <p className="text-2xl font-black tabular-nums">{stats?.totalEvaluations.toLocaleString() || 0}</p>
             </div>
             <div>
               <p className="text-gray-400 text-sm mb-1">Throughput</p>

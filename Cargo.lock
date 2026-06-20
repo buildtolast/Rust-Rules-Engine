@@ -2152,6 +2152,7 @@ dependencies = [
  "rdkafka",
  "store-clickhouse",
  "store-postgres",
+ "telemetry",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2644,9 +2645,9 @@ name = "sre-agent"
 version = "0.0.0"
 dependencies = [
  "sre",
+ "telemetry",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2665,6 +2666,7 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2676,6 +2678,7 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3015,6 +3018,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
+ "tracing",
  "url",
 ]
 

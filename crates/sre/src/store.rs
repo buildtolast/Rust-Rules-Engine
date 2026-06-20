@@ -3,6 +3,25 @@ use clickhouse::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(clickhouse::Row, Serialize, Deserialize, Debug, Clone)]
+pub struct SreOutageEvent {
+    pub container_name: String,
+    pub event_type: u8, // 1 = down, 2 = restored (matches ClickHouse Enum8)
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub occurred_at: DateTime<Utc>,
+    pub auto_restarted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Incident {
+    pub container: String,
+    pub down_at: DateTime<Utc>,
+    pub restored_at: Option<DateTime<Utc>>,
+    pub auto_restarted: bool,
+    pub duration_secs: Option<i64>,
+    pub active: bool,
+}
+
 #[derive(Debug, Error)]
 pub enum SreStoreError {
     #[error("clickhouse error: {0}")]
@@ -30,6 +49,9 @@ pub struct SreStore {
     client: Client,
     last_hashes: std::collections::HashMap<String, String>,
     quiet_streaks: std::collections::HashMap<String, u32>,
+    last_restart: std::collections::HashMap<String, std::time::Instant>,
+    // None = first scan (don't emit events for pre-existing state)
+    prev_running: std::collections::HashMap<String, bool>,
 }
 
 impl SreStore {
@@ -38,7 +60,125 @@ impl SreStore {
             client: client.clone(),
             last_hashes: Default::default(),
             quiet_streaks: Default::default(),
+            last_restart: Default::default(),
+            prev_running: Default::default(),
         }
+    }
+
+    /// Call once per container per scan. Returns Some(event) only when the
+    /// running state transitions (true→false or false→true). The first scan
+    /// is used to establish baseline — no events emitted.
+    pub fn update_running_state(
+        &mut self,
+        container: &str,
+        running: bool,
+        auto_restarted: bool,
+    ) -> Option<SreOutageEvent> {
+        let prev = self.prev_running.get(container).copied();
+        self.prev_running.insert(container.to_string(), running);
+
+        match (prev, running) {
+            (Some(true), false) => Some(SreOutageEvent {
+                container_name: container.to_string(),
+                event_type: 1, // down
+                occurred_at: Utc::now(),
+                auto_restarted: false,
+            }),
+            (Some(false), true) => Some(SreOutageEvent {
+                container_name: container.to_string(),
+                event_type: 2, // restored
+                occurred_at: Utc::now(),
+                auto_restarted,
+            }),
+            _ => None, // first scan or no change
+        }
+    }
+
+    pub async fn write_outage_event(&mut self, ev: &SreOutageEvent) -> Result<(), SreStoreError> {
+        let mut insert = self
+            .client
+            .insert::<SreOutageEvent>("sre_outages")
+            .await?;
+        insert.write(ev).await?;
+        insert.end().await?;
+        Ok(())
+    }
+
+    /// Returns all incidents (paired down/restored events), most recent first.
+    pub async fn read_incidents(client: &Client) -> Result<Vec<Incident>, SreStoreError> {
+        let events = client
+            .query(
+                "SELECT container_name, event_type, occurred_at, auto_restarted
+                 FROM sre_outages
+                 ORDER BY container_name, occurred_at ASC",
+            )
+            .fetch_all::<SreOutageEvent>()
+            .await?;
+
+        // Pair down (1) with the next restored (2) per container.
+        let mut open: std::collections::HashMap<String, SreOutageEvent> = Default::default();
+        let mut incidents: Vec<Incident> = Vec::new();
+
+        for ev in events {
+            match ev.event_type {
+                1 => {
+                    open.insert(ev.container_name.clone(), ev);
+                }
+                2 => {
+                    if let Some(down) = open.remove(&ev.container_name) {
+                        let duration_secs = (ev.occurred_at - down.occurred_at).num_seconds();
+                        incidents.push(Incident {
+                            container: down.container_name,
+                            down_at: down.occurred_at,
+                            restored_at: Some(ev.occurred_at),
+                            auto_restarted: ev.auto_restarted,
+                            duration_secs: Some(duration_secs),
+                            active: false,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Any remaining open events are still-active outages.
+        for (_, down) in open {
+            incidents.push(Incident {
+                container: down.container_name,
+                down_at: down.occurred_at,
+                restored_at: None,
+                auto_restarted: false,
+                duration_secs: None,
+                active: true,
+            });
+        }
+
+        incidents.sort_by(|a, b| b.down_at.cmp(&a.down_at));
+        Ok(incidents)
+    }
+
+    /// True if the container was restarted less than `cooldown_secs` ago.
+    pub fn is_restart_on_cooldown(&self, container: &str, cooldown_secs: u64) -> bool {
+        self.last_restart
+            .get(container)
+            .map(|t| t.elapsed().as_secs() < cooldown_secs)
+            .unwrap_or(false)
+    }
+
+    pub fn record_restart(&mut self, container: &str) {
+        self.last_restart
+            .insert(container.to_string(), std::time::Instant::now());
+    }
+
+    /// True if we issued a restart for this container and it was previously down.
+    pub fn was_auto_restarted(&self, container: &str) -> bool {
+        let was_down = self.prev_running.get(container).copied() == Some(false);
+        let restarted_recently = self
+            .last_restart
+            .get(container)
+            .map(|t| t.elapsed().as_secs() < 120)
+            .unwrap_or(false);
+        was_down && restarted_recently
     }
 
     /// True if the filtered log window is identical to the previous scan.

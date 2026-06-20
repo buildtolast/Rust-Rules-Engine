@@ -116,9 +116,9 @@ fi
 # dc_run <args...> — wraps $DC with the correct compose files.
 dc_run() {
     if [ "$OBS_MODE" = true ]; then
-        dc_run -f "$COMPOSE_OBS" "$@"
+        $DC -f "$COMPOSE_FILE" -f "$COMPOSE_OBS" "$@"
     else
-        dc_run "$@"
+        $DC -f "$COMPOSE_FILE" "$@"
     fi
 }
 

@@ -8,13 +8,6 @@ use std::time::Duration;
 
 use crate::{ApiError, AppState};
 
-fn max_simulation_count() -> usize {
-    std::env::var("MAX_SIMULATION_COUNT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(1_000_000)
-}
-
 fn simulation_senders() -> usize {
     std::env::var("SIMULATION_SENDERS")
         .ok()
@@ -44,9 +37,8 @@ pub async fn push(
     Query(q): Query<PushQuery>,
 ) -> Result<Json<PushResult>, ApiError> {
     let requested = q.count;
-    let max_count = max_simulation_count();
     let senders = simulation_senders();
-    let count = q.count.min(max_count);
+    let count = q.count;
     let producer = s.producer.clone();
     let topic = s.source_topic.clone();
 

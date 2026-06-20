@@ -109,6 +109,12 @@ This does:
 
 # Tear down everything
 ./deploy/run.sh --down
+
+# Also start SigNoz observability overlay (OTEL collector + SigNoz UI on :3301)
+./deploy/run.sh --obs
+
+# Flags can be combined freely
+./deploy/run.sh --rebuild --obs --logs
 ```
 
 ### Port overrides
@@ -690,6 +696,19 @@ After `cargo update`, rebuild Docker images with `./deploy/run.sh --rebuild`.
 rdkafka bundles librdkafka as a C dependency compiled by the Rust build. Upgrading rdkafka
 will also upgrade librdkafka. Check the rdkafka changelog for breaking changes to EOS
 configuration (particularly `transactional_id`, `enable.idempotence`, `acks` semantics).
+
+### SigNoz images (`--obs` mode)
+
+The observability overlay (`deploy/docker-compose.observability.yml`) pins two SigNoz images:
+
+| Image | Current tag | Notes |
+|---|---|---|
+| `signoz/signoz` | `v0.129.0` | SigNoz UI + query service; tags use `v` prefix |
+| `signoz/signoz-otel-collector` | `v0.144.5` | SigNoz-flavoured OTEL collector |
+
+When upgrading, bump both together — the collector and the UI must be compatible.
+Check [SigNoz releases](https://github.com/SigNoz/signoz/releases) for the matched pair.
+The `0.x.x` (no `v` prefix) tag format does not exist on Docker Hub; always include the `v`.
 
 ### ClickHouse image
 

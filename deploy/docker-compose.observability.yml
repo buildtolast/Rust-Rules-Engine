@@ -38,7 +38,7 @@ services:
       - rre_default
 
   signoz-otelcollector:
-    image: signoz/signoz-otel-collector:0.111.25
+    image: signoz/signoz-otel-collector:v0.144.5
     container_name: rre-signoz-otelcollector
     environment:
       CLICKHOUSE_URL: tcp://signoz-clickhouse:9000
@@ -49,7 +49,7 @@ services:
       - rre_default
 
   signoz:
-    image: signoz/signoz:0.55.0
+    image: signoz/signoz:v0.129.0
     container_name: rre-signoz
     environment:
       STORAGE: clickhouse

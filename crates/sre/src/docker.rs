@@ -77,6 +77,13 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
     Ok(result)
 }
 
+pub async fn restart_container(docker: &Docker, id: &str) -> Result<(), DockerError> {
+    docker
+        .restart_container(id, None)
+        .await
+        .map_err(DockerError::Bollard)
+}
+
 pub async fn tail_logs(docker: &Docker, name: &str, lines: usize) -> Result<String, DockerError> {
     let opts = LogsOptions::<String> {
         stdout: true,

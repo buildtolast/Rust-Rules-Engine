@@ -7,7 +7,15 @@ the relevant source file, collects the generated fixes, and opens a GitHub
 PR for human + Claude review.
 
 Usage:
-  python3 tools/sre-remediate.py [--dry-run]
+  python3 tools/sre-remediate.py [--dry-run] [--no-confirm]
+  python3 tools/sre-remediate.py --serve [--port 8089]
+
+Flags:
+  --dry-run     Show what would be changed without writing or pushing anything.
+  --no-confirm  Skip the interactive PR confirmation prompt (implied in --serve mode).
+  --serve       Start an HTTP server so the UI "Remediate" button can trigger this
+                script. Streams output as SSE. Default port: 8089.
+  --port N      Port for --serve mode (default: 8089).
 
 Environment:
   UNSLOTH_API_KEY   API key for the local LLM (default: empty)
@@ -34,6 +42,8 @@ LLM_MODEL   = os.environ.get("LLM_MODEL", "unsloth")
 LLM_API_KEY = os.environ.get("UNSLOTH_API_KEY", "")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 DRY_RUN     = "--dry-run" in sys.argv
+SERVE_MODE  = "--serve" in sys.argv
+NO_CONFIRM  = "--no-confirm" in sys.argv or SERVE_MODE or not sys.stdin.isatty()
 
 REPO_ROOT = Path(
     subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode().strip()
@@ -342,20 +352,48 @@ def main() -> None:
     # 4. Apply patches: one commit per unique file.
     print(f"\n[4/5] Applying {len(patches)} patch(es) ...")
     committed_files: set[str] = set()
+    patches_with_changes: list[bool] = []
     for p in patches:
         dest = wt / p["file"]
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(p["content"])
         if p["file"] not in committed_files:
             run(["git", "add", p["file"]], cwd=wt)
+            # Check whether git add actually staged any diff.
+            staged = run(["git", "diff", "--cached", "--name-only"], cwd=wt)
+            if not staged:
+                print(f"    ~ {p['file']} — LLM output identical to current main, skipping")
+                patches_with_changes.append(False)
+                p["_changed"] = False
+                continue
             run(["git", "commit", "-m", p["commit_msg"]], cwd=wt)
             committed_files.add(p["file"])
+            patches_with_changes.append(True)
+            p["_changed"] = True
             print(f"    ✓ committed {p['file']}")
         else:
+            patches_with_changes.append(False)
             print(f"    ~ {p['file']} already committed (multiple findings mapped to same file)")
 
-    # 5. Push branch and open PR.
-    print(f"\n[5/5] Pushing branch and creating PR ...")
+    actual_changes = sum(patches_with_changes)
+    if actual_changes == 0:
+        print("\nAll LLM-generated fixes match current main — issues appear to be already fixed.")
+        remove_worktree(wt)
+        return
+
+    # 5. Confirm with user before raising a PR (skipped in non-interactive / CI mode).
+    if not NO_CONFIRM:
+        print(f"\nReady to push branch '{branch}' and open a PR with {actual_changes} change(s).")
+        print("Files that will change:")
+        for p in patches:
+            if p.get("_changed", True):
+                print(f"  {p['file']}  — {p['commit_msg']}")
+        answer = input("\nRaise PR? [y/N] ").strip().lower()
+        if answer != "y":
+            print("Aborted. Worktree left at .git/sre-remediation-wt for inspection.")
+            return
+
+    print(f"\n[5/5] Pushing branch and creating PR ({actual_changes} file(s) actually changed) ...")
     run(["git", "push", "-u", "origin", branch], cwd=wt)
     pr_url = create_pr(branch, findings, patches)
     print(f"\n✅  PR created: {pr_url}")
@@ -364,5 +402,92 @@ def main() -> None:
     remove_worktree(wt)
 
 
+# ── Serve mode ────────────────────────────────────────────────────────────────
+
+def serve_mode(port: int) -> None:
+    """Tiny HTTP server that lets the UI button trigger the pipeline via SSE."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import threading
+
+    _lock = threading.Lock()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_OPTIONS(self) -> None:
+            self.send_response(204)
+            self._cors()
+            self.end_headers()
+
+        def do_GET(self) -> None:
+            if self.path != '/status':
+                self.send_error(404)
+                return
+            locked = not _lock.acquire(blocking=False)
+            if not locked:
+                _lock.release()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(json.dumps({"running": locked}).encode())
+
+        def do_POST(self) -> None:
+            if self.path != '/remediate':
+                self.send_error(404)
+                return
+            if not _lock.acquire(blocking=False):
+                self.send_response(409)
+                self._cors()
+                self.end_headers()
+                self.wfile.write(b'data: {"error":"Remediation already in progress"}\n\n')
+                return
+            try:
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('X-Accel-Buffering', 'no')
+                self._cors()
+                self.end_headers()
+
+                script = Path(__file__).resolve()
+                env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+                proc = subprocess.Popen(
+                    [sys.executable, str(script), '--no-confirm'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                )
+                for line in proc.stdout:
+                    payload = json.dumps({"line": line.rstrip('\n')})
+                    self.wfile.write(f"data: {payload}\n\n".encode())
+                    self.wfile.flush()
+                proc.wait()
+                done_payload = json.dumps({"done": True, "exit_code": proc.returncode})
+                self.wfile.write(f"data: {done_payload}\n\n".encode())
+                self.wfile.flush()
+            except BrokenPipeError:
+                pass
+            finally:
+                _lock.release()
+
+        def _cors(self) -> None:
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+
+        def log_message(self, fmt: str, *args: object) -> None:
+            print(f"[serve] {fmt % args}", flush=True)
+
+    print(f"[serve] SRE remediation server listening on :{port}", flush=True)
+    print(f"[serve] POST http://localhost:{port}/remediate  — trigger pipeline (streams SSE)", flush=True)
+    print(f"[serve] GET  http://localhost:{port}/status     — check if running", flush=True)
+    HTTPServer(('', port), Handler).serve_forever()
+
+
 if __name__ == "__main__":
-    main()
+    if SERVE_MODE:
+        _port_idx = sys.argv.index('--port') if '--port' in sys.argv else -1
+        _port = int(sys.argv[_port_idx + 1]) if _port_idx != -1 else 8089
+        serve_mode(_port)
+    else:
+        main()

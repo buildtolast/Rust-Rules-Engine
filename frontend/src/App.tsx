@@ -20,19 +20,24 @@ import {
   FileText,
   ShieldAlert,
   BarChart2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Cpu,
 } from 'lucide-react';
 import type { Rule } from './types';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import SimulationPanel from './SimulationPanel';
 import { ReportsTab } from './ReportsTab';
-import { SreTab } from './SreTab';
+import { SreTab, useActiveOutages } from './SreTab';
 import { MetricsTab } from './MetricsTab';
 import { ConfigTab } from './ConfigTab';
+import { TracingInsightsTab } from './TracingInsightsTab';
 import { HealthBar } from './HealthBar';
+import { AlertTriangle, X as XIcon } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports' | 'sre' | 'metrics' | 'config'>('management');
+  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports' | 'sre' | 'metrics' | 'config' | 'tracing'>('management');
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const activeOutages = useActiveOutages();
   const [isInitializing, setIsInitializing] = useState(true);
   const [systemHealth, setSystemHealth] = useState<any>(null);
 
@@ -52,7 +57,7 @@ const App: React.FC = () => {
       }
     };
 
-    const interval = setInterval(checkHealth, 2000);
+    const interval = setInterval(checkHealth, 30000);
     checkHealth();
 
     return () => clearInterval(interval);
@@ -143,6 +148,12 @@ const App: React.FC = () => {
     return matchesSearch && matchesFilter;
   });
 
+  const showBanner = activeOutages.length > 0 && !bannerDismissed;
+
+  React.useEffect(() => {
+    if (activeOutages.length === 0) setBannerDismissed(false);
+  }, [activeOutages.length]);
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-['Plus_Jakarta_Sans']">
@@ -186,6 +197,31 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      {showBanner && (
+        <div className="sticky top-0 z-50 bg-red-600 text-white px-4 py-3 flex items-center gap-3 shadow-lg">
+          <AlertTriangle size={18} className="flex-shrink-0 animate-pulse" />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold">Service Outage Detected — </span>
+            <span className="text-red-100">
+              {activeOutages.map(o => o.container.replace('rre-', '')).join(', ')}
+              {activeOutages.length === 1 ? ' is' : ' are'} currently down.
+            </span>
+          </div>
+          <button
+            onClick={() => setActiveTab('sre')}
+            className="flex-shrink-0 text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            View Incidents
+          </button>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="flex-shrink-0 hover:bg-white/20 p-1 rounded transition-colors"
+            aria-label="Dismiss"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+      )}
       <HealthBar />
       <div className="max-w-6xl mx-auto p-4 md:p-8">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
@@ -197,7 +233,7 @@ const App: React.FC = () => {
               Rules Engine Dashboard
             </h1>
             <p className="mt-2 text-lg text-gray-600">
-              Manage and deploy Spring Expression Language (SpEL) rules for audit streaming.
+              Rules-based event streaming engine — evaluate, match, and route audit events in real time.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -268,6 +304,13 @@ const App: React.FC = () => {
           >
             <SlidersHorizontal size={18} />
             Config & Flags
+          </button>
+          <button
+            onClick={() => setActiveTab('tracing')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'tracing' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <Cpu size={18} />
+            Tracing
           </button>
         </div>
 
@@ -360,7 +403,7 @@ const App: React.FC = () => {
                     <tr className="bg-gray-50/50 border-b border-gray-100">
                       <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">SpEL Expression</th>
+                      <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">Rule Expression</th>
                       <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Last Updated</th>
                       <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                     </tr>
@@ -463,7 +506,7 @@ const App: React.FC = () => {
             </div>
           </>
         ) : activeTab === 'analytics' ? (
-          <AnalyticsDashboard />
+          <AnalyticsDashboard rules={rules} />
         ) : activeTab === 'simulator' ? (
           <SimulationPanel />
         ) : activeTab === 'reports' ? (
@@ -472,6 +515,8 @@ const App: React.FC = () => {
           <SreTab />
         ) : activeTab === 'metrics' ? (
           <MetricsTab />
+        ) : activeTab === 'tracing' ? (
+          <TracingInsightsTab />
         ) : (
           <ConfigTab />
         )}
@@ -513,7 +558,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="expression" className="text-sm font-bold text-gray-700 ml-1">
-                    SpEL Expression
+                    Rule Expression
                   </label>
                   <textarea
                     id="expression"

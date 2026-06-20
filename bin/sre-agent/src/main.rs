@@ -1,11 +1,8 @@
 use std::time::Duration;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    let _telemetry = telemetry::init("sre-agent");
 
     let cfg = sre::SreConfig {
         clickhouse_url: env_require("CLICKHOUSE_URL"),
@@ -33,6 +30,13 @@ async fn main() {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(8088),
+        auto_restart: std::env::var("AUTO_RESTART")
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false),
+        restart_cooldown_secs: std::env::var("RESTART_COOLDOWN_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300),
     };
 
     if let Err(e) = sre::run(cfg).await {

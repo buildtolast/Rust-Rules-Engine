@@ -6,6 +6,7 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+telemetry        = { path = "../../crates/telemetry" }
 pipeline         = { path = "../../crates/pipeline" }
 web              = { path = "../../crates/web" }
 store-postgres   = { path = "../../crates/store-postgres" }

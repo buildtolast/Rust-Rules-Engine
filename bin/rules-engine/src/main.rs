@@ -3,13 +3,10 @@ use std::{net::SocketAddr, sync::Arc};
 use anyhow::Context;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    let _telemetry = telemetry::init("rules-engine");
 
     // ── Config from environment ──────────────────────────────────────────────
     let pg_url = env_require("DATABASE_URL");

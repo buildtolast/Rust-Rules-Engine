@@ -22,6 +22,7 @@ pub struct Finding {
     pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+#[derive(Clone)]
 pub struct AnalysisClient {
     base_url: String,
     model: String,

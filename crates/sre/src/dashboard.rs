@@ -1,4 +1,4 @@
-use crate::{store::SreStore, Finding, SreState};
+use crate::{analysis::AnalysisClient, store::{Incident, SreStore}, trace_analysis, Finding, SreState};
 use axum::{
     extract::State,
     response::{
@@ -19,6 +19,7 @@ struct AppState {
     state: Arc<RwLock<SreState>>,
     tx: broadcast::Sender<Finding>,
     ch: Client,
+    llm: AnalysisClient,
 }
 
 async fn index(State(app): State<AppState>) -> Html<&'static str> {
@@ -232,6 +233,18 @@ async fn findings_sse(
     )
 }
 
+async fn outages(State(app): State<AppState>) -> Json<Vec<Incident>> {
+    match SreStore::read_incidents(&app.ch).await {
+        Ok(incidents) => Json(incidents),
+        Err(_) => Json(vec![]),
+    }
+}
+
+async fn traces_insights(State(s): State<AppState>) -> Json<trace_analysis::TraceInsights> {
+    let insights = trace_analysis::fetch_insights(&s.ch, &s.llm).await;
+    Json(insights)
+}
+
 async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({"ok": true}))
 }
@@ -240,15 +253,18 @@ pub async fn serve(
     state: Arc<RwLock<SreState>>,
     tx: broadcast::Sender<Finding>,
     ch: Client,
+    llm: AnalysisClient,
     port: u16,
 ) {
-    let app_state = AppState { state, tx, ch };
+    let app_state = AppState { state, tx, ch, llm };
 
     let router = Router::new()
         .route("/", get(index))
         .route("/api/sre/status", get(status))
         .route("/api/sre/findings", get(findings))
         .route("/api/sre/findings/stream", get(findings_sse))
+        .route("/api/sre/outages", get(outages))
+        .route("/api/sre/traces/insights", get(traces_insights))
         .route("/health", get(health_check))
         .with_state(app_state);
 

@@ -375,6 +375,7 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     );
 
     // Spawn analysis loop
+    let dash_llm = llm.clone();
     let loop_handle = {
         let docker = docker.clone();
         let state = state.clone();
@@ -392,7 +393,7 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
         let port = cfg.dashboard_port;
         let dash_ch = ch_client(&cfg);
         tokio::spawn(async move {
-            dashboard::serve(state, tx, dash_ch, port).await;
+            dashboard::serve(state, tx, dash_ch, dash_llm, port).await;
         })
     };
 

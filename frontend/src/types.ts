@@ -58,6 +58,15 @@ export interface SreStatus {
   last_scan_at: string | null;
 }
 
+export interface Incident {
+  container: string;
+  down_at: string;
+  restored_at: string | null;
+  auto_restarted: boolean;
+  duration_secs: number | null;
+  active: boolean;
+}
+
 export interface AuditRecord {
   auditId: string;
   ruleId: string;
@@ -72,4 +81,26 @@ export interface AuditRecord {
   parseTimeNano: number;
   evalTimeNano: number;
   totalTimeNano: number;
+}
+
+export interface RulePerf {
+  rule_id: string;
+  eval_count: number;
+  avg_eval_ms: number;
+  p95_eval_ms: number;
+  p99_eval_ms: number;
+  avg_parse_ms: number;
+  error_rate_pct: number;
+}
+
+export interface TraceInsights {
+  generated_at: string;
+  window_minutes: number;
+  rule_perf: RulePerf[];
+  llm_insights: string[];
+  llm_bottlenecks: string[];
+  llm_recommendations: string[];
+  llm_available: boolean;
+  total_evals: number;
+  avg_eval_ms_overall: number;
 }

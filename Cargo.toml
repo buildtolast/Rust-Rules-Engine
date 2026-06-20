@@ -8,6 +8,7 @@ members = [
     "crates/pipeline",
     "crates/web",
     "crates/sre",
+    "crates/telemetry",
     "bin/rules-engine",
     "bin/sre-agent",
 ]
@@ -35,3 +36,7 @@ tower = "0.4"
 tower-http = { version = "0.6", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 rayon = "1"
+opentelemetry          = { version = "0.27", features = ["trace"] }
+opentelemetry_sdk      = { version = "0.27", features = ["rt-tokio", "trace"] }
+opentelemetry-otlp     = { version = "0.27", features = ["tonic", "trace"] }
+tracing-opentelemetry  = "0.28"

@@ -3,9 +3,9 @@ import { Activity, CheckCircle, Cpu, Clock, Wifi, WifiOff, ChevronDown, ChevronR
 import type { SreFinding, SreStatus, SreContainerStatus } from './types';
 
 const SEVERITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  INFO:     { badge: 'bg-blue-50 text-blue-700 border-blue-100',     dot: 'bg-blue-500' },
-  WARN:     { badge: 'bg-amber-50 text-amber-700 border-amber-100',  dot: 'bg-amber-400' },
-  ERROR:    { badge: 'bg-red-50 text-red-700 border-red-100',        dot: 'bg-red-500' },
+  INFO:     { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' },
+  WARN:     { badge: 'bg-amber-50 text-amber-700 border-amber-100',       dot: 'bg-amber-400' },
+  ERROR:    { badge: 'bg-red-50 text-red-700 border-red-100',             dot: 'bg-red-500' },
   CRITICAL: { badge: 'bg-red-100 text-red-800 border-red-200 font-black', dot: 'bg-red-700' },
 };
 
@@ -69,7 +69,8 @@ function ContainerCard({ c }: { c: SreContainerStatus }) {
 function FindingCard({ f }: { f: SreFinding }) {
   const [expanded, setExpanded] = useState(false);
   const { badge, dot } = severityStyle(f.severity);
-  const isActionable = f.proposed_fix && f.proposed_fix !== 'No action required';
+  const isInfo = f.severity === 'INFO';
+  const isActionable = !isInfo && f.proposed_fix && f.proposed_fix !== 'No action required';
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -94,7 +95,7 @@ function FindingCard({ f }: { f: SreFinding }) {
         </div>
       </div>
 
-      {f.proposed_fix && (
+      {!isInfo && f.proposed_fix && (
         <button
           onClick={() => setExpanded(e => !e)}
           className={`w-full flex items-center gap-2 px-5 py-3 text-xs font-semibold border-t transition-colors ${

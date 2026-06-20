@@ -1,6 +1,7 @@
 /target
 **/*.rs.bk
 .env
+deploy/.env
 
 # local-LLM loop usage log (local artifact)
 tools/llm-usage.log

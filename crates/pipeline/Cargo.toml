@@ -17,6 +17,7 @@ tracing           = { workspace = true }
 rdkafka           = { workspace = true }
 serde_json        = { workspace = true }
 chrono            = { workspace = true }
+rayon             = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

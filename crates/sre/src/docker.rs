@@ -2,7 +2,6 @@ use bollard::container::{ListContainersOptions, LogOutput, LogsOptions};
 use bollard::models::{Health, HealthStatusEnum};
 use bollard::Docker;
 use futures_util::stream::StreamExt;
-use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -38,13 +37,10 @@ fn health_from(h: Option<Health>) -> HealthSummary {
 }
 
 pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, DockerError> {
-    let mut filters = HashMap::new();
-    filters.insert("status", vec!["running"]);
-
+    // Include stopped/exited containers so the SRE detects containers that went down.
     let summaries = docker
-        .list_containers(Some(ListContainersOptions {
-            all: false,
-            filters,
+        .list_containers(Some(ListContainersOptions::<String> {
+            all: true,
             ..Default::default()
         }))
         .await?;

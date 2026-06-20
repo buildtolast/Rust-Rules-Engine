@@ -14,6 +14,5 @@ RUN cp /usr/share/nginx/html/index.html /usr/share/nginx/html/rules.html
 # Use .template for envsubst support
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 ENV NGINX_PORT=80
-ENV BACKEND_URL=http://app:8080
 EXPOSE ${NGINX_PORT}
 CMD ["nginx", "-g", "daemon off;"]

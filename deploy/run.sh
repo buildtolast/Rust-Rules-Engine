@@ -160,24 +160,22 @@ else
 fi
 
 # ── Kafka topic setup ─────────────────────────────────────────────────────────
+# Topics are created by the redpanda-init service (RF=2, 6 partitions).
+# Fallback: create topics if using an external broker override.
 SOURCE_TOPIC="${SOURCE_TOPIC:-source-events}"
 TARGET_TOPIC="${TARGET_TOPIC:-target-events}"
 
-if [ -z "$KAFKA_BROKERS_OVERRIDE" ]; then
-    echo "⏳ Waiting for Redpanda..."
-    until docker exec rre-redpanda rpk cluster info --brokers localhost:9092 > /dev/null 2>&1; do
-        sleep 2
-    done
-    for topic in "$SOURCE_TOPIC" "$TARGET_TOPIC"; do
-        docker exec rre-redpanda rpk topic create "$topic" \
-            --brokers localhost:9092 --partitions 3 --replicas 1 2>/dev/null || true
-    done
+if [ -n "$KAFKA_BROKERS_OVERRIDE" ]; then
+    echo "⏳ External Kafka — ensuring topics exist..."
+    BROKER=$(echo "$KAFKA_BROKERS_OVERRIDE" | cut -d, -f1)
+    docker run --rm --network=host redpandadata/redpanda:v24.2.7 \
+        rpk topic create "$SOURCE_TOPIC" "$TARGET_TOPIC" --brokers "$BROKER" 2>/dev/null || true
     echo "   Kafka topics ready: $SOURCE_TOPIC, $TARGET_TOPIC"
 fi
 
 # ── Wait for healthy ──────────────────────────────────────────────────────────
 echo "⏳ Waiting for all services to become healthy..."
-SERVICES="rre-redpanda rre-clickhouse rre-postgres rre-app rre-sre-agent"
+SERVICES="rre-redpanda-0 rre-redpanda-1 rre-redpanda-2 rre-clickhouse rre-postgres rre-app-1 rre-app-2 rre-sre-agent-1 rre-sre-agent-2"
 MAX_ATTEMPTS=90
 ATTEMPT=1
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do

@@ -25,6 +25,7 @@ pub struct SreConfig {
     pub llm_base_url:      String,
     pub llm_model:         String,
     pub llm_api_key:       Option<String>,
+    pub llm_timeout_secs:  u64,
     pub scan_interval:     Duration,
     pub log_tail_lines:    usize,
     pub dashboard_port:    u16,
@@ -125,7 +126,21 @@ async fn scan_once(
 
     for c in &containers {
         analyze_container(c, docker, llm, store, state, tx, cfg).await;
+        // Give the single-process inference server breathing room between requests.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
+}
+
+/// Keep only WARN/ERROR/CRITICAL log lines — INFO and DEBUG are noise for SRE analysis.
+fn filter_noisy_logs(raw: &str) -> String {
+    raw.lines()
+        .filter(|l| {
+            let u = l.to_ascii_uppercase();
+            u.contains("WARN") || u.contains("ERROR") || u.contains("CRITICAL")
+                || u.contains("FATAL") || u.contains("PANIC")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 async fn analyze_container(
@@ -137,13 +152,78 @@ async fn analyze_container(
     tx:     &broadcast::Sender<Finding>,
     cfg:    &SreConfig,
 ) {
-    let logs = match docker::tail_logs(docker, &c.name, cfg.log_tail_lines).await {
+    // Container is stopped/exited — emit CRITICAL immediately, no LLM needed.
+    if !c.running {
+        let hash = sha256_hex(&format!("{}:stopped", c.name));
+        if !store.is_unchanged(&c.name, &hash) {
+            store.reset_suppression(&c.name);
+            store.record_hash(&c.name, &hash);
+            store.record_severity(&c.name, "CRITICAL");
+
+            let finding = Finding {
+                severity:       "CRITICAL".into(),
+                category:       "crash_loop".into(),
+                finding:        format!("Container {} is not running (exited/stopped). Service is down.", c.name),
+                proposed_fix:   format!("Restart with: docker start {}", c.name),
+                container_name: c.name.clone(),
+                observed_at:    Some(Utc::now()),
+            };
+
+            let obs = store::SreObservation {
+                observed_at:     Utc::now(),
+                container_name:  c.name.clone(),
+                severity:        finding.severity.clone(),
+                category:        finding.category.clone(),
+                finding:         finding.finding.clone(),
+                proposed_fix:    finding.proposed_fix.clone(),
+                log_window_hash: hash,
+                log_snippet:     String::new(),
+            };
+            if let Err(e) = store.write(&obs).await {
+                error!("SreStore write error: {e}");
+            }
+
+            {
+                let mut st = state.write().await;
+                if let Some(cs) = st.containers.iter_mut().find(|cs| cs.name == c.name) {
+                    cs.last_severity = Some("CRITICAL".into());
+                }
+                st.push_finding(finding.clone());
+            }
+            let _ = tx.send(finding);
+        }
+        return;
+    }
+
+    let raw = match docker::tail_logs(docker, &c.name, cfg.log_tail_lines).await {
         Ok(l)  => l,
         Err(e) => { warn!("tail_logs {}: {e}", c.name); return; }
     };
 
+    // Only look at lines that signal a problem.
+    let logs = filter_noisy_logs(&raw);
+
+    if logs.is_empty() {
+        // No warnings or errors — nothing to analyse.
+        return;
+    }
+
     let hash = sha256_hex(&logs);
     let snippet: String = logs.chars().take(500).collect();
+
+    // Same WARN/ERROR pattern as last scan — no new information.
+    if store.is_unchanged(&c.name, &hash) {
+        return;
+    }
+
+    // New hash means new WARN/ERROR lines appeared — reset quiet suppression.
+    store.reset_suppression(&c.name);
+
+    // LLM has already confirmed "nothing unusual" several times for this pattern.
+    if store.is_suppressed(&c.name) {
+        store.record_hash(&c.name, &hash);
+        return;
+    }
 
     let mut finding = match llm.analyze(&c.name, &logs).await {
         Ok(f) => {
@@ -158,6 +238,9 @@ async fn analyze_container(
     };
     finding.container_name = c.name.clone();
     finding.observed_at = Some(Utc::now());
+
+    store.record_hash(&c.name, &hash);
+    store.record_severity(&c.name, &finding.severity);
 
     let obs = SreObservation {
         observed_at:     Utc::now(),
@@ -174,7 +257,6 @@ async fn analyze_container(
         error!("SreStore write error: {e}");
     }
 
-    // Update last_severity in state and push to ring buffer
     {
         let mut st = state.write().await;
         if let Some(cs) = st.containers.iter_mut().find(|cs| cs.name == c.name) {
@@ -221,7 +303,12 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     let (tx, _rx) = broadcast::channel::<Finding>(256);
 
     // Build analysis client
-    let llm = AnalysisClient::new(&cfg.llm_base_url, &cfg.llm_model, cfg.llm_api_key.clone());
+    let llm = AnalysisClient::new(
+        &cfg.llm_base_url,
+        &cfg.llm_model,
+        cfg.llm_api_key.clone(),
+        cfg.llm_timeout_secs,
+    );
 
     // Spawn analysis loop
     let loop_handle = {
@@ -236,11 +323,12 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
 
     // Spawn dashboard
     let dash_handle = {
-        let state = state.clone();
-        let tx    = tx.clone();
-        let port  = cfg.dashboard_port;
+        let state   = state.clone();
+        let tx      = tx.clone();
+        let port    = cfg.dashboard_port;
+        let dash_ch = ch_client(&cfg);
         tokio::spawn(async move {
-            dashboard::serve(state, tx, port).await;
+            dashboard::serve(state, tx, dash_ch, port).await;
         })
     };
 

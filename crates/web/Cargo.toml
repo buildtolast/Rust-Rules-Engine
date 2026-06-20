@@ -8,8 +8,11 @@ publish = false
 [dependencies]
 rules-core        = { path = "../core" }
 eval              = { path = "../eval" }
+pipeline          = { path = "../pipeline" }
 store-postgres    = { path = "../store-postgres" }
 store-clickhouse  = { path = "../store-clickhouse" }
+sqlx              = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
+clickhouse        = { version = "0.15.1", features = ["inserter", "chrono"] }
 axum              = { workspace = true }
 tower             = { workspace = true }
 tower-http        = { workspace = true }
@@ -21,3 +24,5 @@ thiserror         = { workspace = true }
 tracing           = { workspace = true }
 rdkafka           = { workspace = true }
 uuid              = { workspace = true }
+futures           = "0.3"
+bytes             = "1"

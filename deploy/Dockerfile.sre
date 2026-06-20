@@ -10,7 +10,7 @@ COPY migrations/ migrations/
 
 RUN cargo build --release -p sre-agent
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/release/sre-agent /usr/local/bin/
 CMD ["sre-agent"]

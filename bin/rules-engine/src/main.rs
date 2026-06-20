@@ -18,14 +18,19 @@ async fn main() -> anyhow::Result<()> {
         database:         std::env::var("CLICKHOUSE_DB").unwrap_or_else(|_| "ruleaudit".into()),
         user:             std::env::var("CLICKHOUSE_USER").unwrap_or_else(|_| "rules".into()),
         password:         std::env::var("CLICKHOUSE_PASSWORD").unwrap_or_else(|_| "rules".into()),
-        batch_max_rows:   500,
+        batch_max_rows:   5_000,
         batch_period_ms:  200,
     };
     let brokers        = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:19092".into());
     let source_topic   = std::env::var("SOURCE_TOPIC").unwrap_or_else(|_| "source-events".into());
     let target_topic   = std::env::var("TARGET_TOPIC").unwrap_or_else(|_| "target-events".into());
     let consumer_group = std::env::var("CONSUMER_GROUP").unwrap_or_else(|_| "rules-engine".into());
-    let txn_id         = std::env::var("TRANSACTIONAL_ID").unwrap_or_else(|_| "rules-engine-txn".into());
+    // Each replica needs a unique transactional ID for Kafka EOS.
+    // HOSTNAME is set by Docker to the container ID when TRANSACTIONAL_ID is not explicit.
+    let txn_id = std::env::var("TRANSACTIONAL_ID").unwrap_or_else(|_| {
+        let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "default".into());
+        format!("rules-engine-txn-{host}")
+    });
     let http_port: u16 = std::env::var("HTTP_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(8080);
 
     // ── Store connections ─────────────────────────────────────────────────────
@@ -36,6 +41,16 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("connecting to clickhouse");
     let ch_client = store_clickhouse::client(&ch_cfg);
     store_clickhouse::run_migrations(&ch_client).await.context("clickhouse migrations")?;
+
+    // ── Seed default rules if the DB is empty ────────────────────────────────
+    {
+        let seed_repo = store_postgres::RuleRepository::new(pool.clone());
+        match store_postgres::seed_default_rules(&seed_repo).await {
+            Ok(0) => tracing::info!("rules already seeded, skipping"),
+            Ok(n) => tracing::info!("seeded {n} default rules"),
+            Err(e) => tracing::warn!("seed failed (non-fatal): {e}"),
+        }
+    }
 
     // ── Rule cache + hot-reload ───────────────────────────────────────────────
     let repo = store_postgres::RuleRepository::new(pool.clone());
@@ -58,12 +73,18 @@ async fn main() -> anyhow::Result<()> {
         .create()
         .context("kafka producer create")?;
 
+    // ── Pipeline metrics counters (shared between pipeline + HTTP handler) ───
+    let counters = Arc::new(pipeline::PipelineCounters::new());
+
     // ── HTTP API ─────────────────────────────────────────────────────────────
     let state = web::AppState {
-        rules: repo,
+        rules:        repo,
         ch_client,
-        producer: Arc::new(producer),
+        producer:     Arc::new(producer),
         source_topic: source_topic.clone(),
+        kafka_brokers: brokers.clone(),
+        counters:     counters.clone(),
+        rule_cache:   cache.clone(),
     };
     let app = web::router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
@@ -83,14 +104,35 @@ async fn main() -> anyhow::Result<()> {
     let cache_pipeline = cache.clone();
     let ch_cfg_pipeline = ch_cfg.clone();
 
-    tokio::select! {
-        r = axum::serve(listener, app) => {
-            r.context("axum serve")?;
+    // The pipeline runs in its own task with exponential-backoff retry.
+    // Redpanda going down (or any transient Kafka error) restarts only the
+    // pipeline — the HTTP API keeps serving health/rules/analytics throughout.
+    tokio::spawn(async move {
+        let mut backoff = std::time::Duration::from_secs(1);
+        loop {
+            tracing::info!("pipeline starting");
+            match pipeline::run(
+                pipeline_cfg.clone(),
+                cache_pipeline.clone(),
+                ch_cfg_pipeline.clone(),
+                counters.clone(),
+            )
+            .await
+            {
+                Ok(()) => {
+                    tracing::info!("pipeline exited cleanly");
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!("pipeline error (retry in {backoff:?}): {e}");
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
+                }
+            }
         }
-        r = pipeline::run(pipeline_cfg, cache_pipeline, ch_cfg_pipeline) => {
-            r.context("pipeline")?;
-        }
-    }
+    });
+
+    axum::serve(listener, app).await.context("axum serve")?;
 
     Ok(())
 }

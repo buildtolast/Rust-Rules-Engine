@@ -15,6 +15,10 @@ async fn main() {
         llm_base_url:    env_require("LLM_BASE_URL"),
         llm_model:       std::env::var("LLM_MODEL").unwrap_or_else(|_| "unsloth".into()),
         llm_api_key:     std::env::var("LLM_API_KEY").ok(),
+        llm_timeout_secs: std::env::var("LLM_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(120),
         scan_interval:   Duration::from_secs(
             std::env::var("SCAN_INTERVAL_SECS")
                 .ok()

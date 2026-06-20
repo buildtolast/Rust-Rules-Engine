@@ -34,9 +34,11 @@ impl AnalysisClient {
         base_url: impl Into<String>,
         model: impl Into<String>,
         api_key: Option<String>,
+        timeout_secs: u64,
     ) -> Self {
         let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(timeout_secs))
             .build()
             .expect("failed to build reqwest client");
         Self { base_url: base_url.into(), model: model.into(), api_key, http }
@@ -73,21 +75,39 @@ impl AnalysisClient {
             "max_tokens":  300
         });
 
-        let mut req = self
-            .http
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            .json(&body);
-
-        if let Some(key) = &self.api_key {
-            req = req.bearer_auth(key);
-        }
-
-        let response = req
-            .send()
-            .await
-            .map_err(|e| AnalysisError::Unavailable(e.to_string()))?
-            .error_for_status()
-            .map_err(|e| AnalysisError::Unavailable(e.to_string()))?;
+        // Retry once on connection errors (server closed idle keep-alive between calls).
+        // Do NOT retry on timeouts — the model is busy and re-sending doubles the wait.
+        let response = {
+            let mut last_err = None;
+            let mut result = None;
+            for attempt in 0..2u8 {
+                if attempt > 0 {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                }
+                let mut req = self
+                    .http
+                    .post(format!("{}/v1/chat/completions", self.base_url))
+                    .json(&body);
+                if let Some(key) = &self.api_key {
+                    req = req.bearer_auth(key);
+                }
+                match req.send().await {
+                    Err(e) if e.is_timeout() => {
+                        // Timeout: model is saturated, bail immediately.
+                        return Err(AnalysisError::Unavailable(e.to_string()));
+                    }
+                    Err(e) => { last_err = Some(e); }
+                    Ok(r) => { result = Some(r); break; }
+                }
+            }
+            match result {
+                Some(r) => r.error_for_status()
+                             .map_err(|e| AnalysisError::Unavailable(e.to_string()))?,
+                None     => return Err(AnalysisError::Unavailable(
+                    last_err.unwrap().to_string()
+                )),
+            }
+        };
 
         let payload: serde_json::Value = response
             .json()

@@ -4,10 +4,18 @@ import type { AnalyticsStats } from './types';
 
 const SimulationPanel: React.FC = () => {
   const [messageCount, setMessageCount] = useState<number>(100);
+  const [maxCount, setMaxCount] = useState<number>(1_000_000);
   const [isSimulating, setIsSimulating] = useState(false);
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
-  const [lastResult, setLastResult] = useState<{ count: number; message: string } | null>(null);
+  const [lastResult, setLastResult] = useState<{ requested: number; publishing: number; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.ok ? r.json() : null)
+      .then(cfg => { if (cfg?.max_simulation_count) setMaxCount(cfg.max_simulation_count); })
+      .catch(() => {});
+  }, []);
 
   const fetchStats = async () => {
     try {
@@ -51,10 +59,9 @@ const SimulationPanel: React.FC = () => {
   };
 
   const formatNano = (nano: number) => {
-    if (nano === 0) return '0ms';
+    if (nano === 0) return '0.000000ms';
     const ms = nano / 1_000_000;
-    if (ms < 1) return ms.toFixed(3) + 'ms';
-    return ms.toFixed(2) + 'ms';
+    return ms.toFixed(6) + 'ms';
   };
 
   return (
@@ -85,7 +92,7 @@ const SimulationPanel: React.FC = () => {
               className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all outline-none font-medium"
               placeholder="e.g. 1000"
               min="1"
-              max="10000"
+              max={maxCount}
             />
           </div>
           <button
@@ -119,9 +126,19 @@ const SimulationPanel: React.FC = () => {
         )}
 
         {lastResult && (
-          <div className="mt-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-700 animate-in slide-in-from-top-2">
-            <CheckCircle2 size={20} />
-            <span className="font-medium">{lastResult.message}</span>
+          <div className="mt-6 space-y-2 animate-in slide-in-from-top-2">
+            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-700">
+              <CheckCircle2 size={20} />
+              <span className="font-medium">{lastResult.message}</span>
+            </div>
+            {lastResult.requested !== lastResult.publishing && (
+              <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-700 text-sm">
+                <AlertCircle size={16} />
+                <span>
+                  Requested {lastResult.requested.toLocaleString()} — capped to {lastResult.publishing.toLocaleString()} (server max {maxCount.toLocaleString()})
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>

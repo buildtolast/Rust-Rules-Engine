@@ -18,16 +18,21 @@ import {
   Settings,
   Zap,
   FileText,
-  ShieldAlert
+  ShieldAlert,
+  BarChart2,
+  SlidersHorizontal
 } from 'lucide-react';
 import type { Rule } from './types';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import SimulationPanel from './SimulationPanel';
 import { ReportsTab } from './ReportsTab';
 import { SreTab } from './SreTab';
+import { MetricsTab } from './MetricsTab';
+import { ConfigTab } from './ConfigTab';
+import { HealthBar } from './HealthBar';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports' | 'sre'>('management');
+  const [activeTab, setActiveTab] = useState<'management' | 'analytics' | 'simulator' | 'reports' | 'sre' | 'metrics' | 'config'>('management');
   const [isInitializing, setIsInitializing] = useState(true);
   const [systemHealth, setSystemHealth] = useState<any>(null);
 
@@ -180,8 +185,9 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <HealthBar />
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl flex items-center gap-4">
@@ -248,6 +254,20 @@ const App: React.FC = () => {
           >
             <ShieldAlert size={18} />
             SRE Monitor
+          </button>
+          <button
+            onClick={() => setActiveTab('metrics')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'metrics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <BarChart2 size={18} />
+            Service Metrics
+          </button>
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'config' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <SlidersHorizontal size={18} />
+            Config & Flags
           </button>
         </div>
 
@@ -448,8 +468,12 @@ const App: React.FC = () => {
           <SimulationPanel />
         ) : activeTab === 'reports' ? (
           <ReportsTab />
-        ) : (
+        ) : activeTab === 'sre' ? (
           <SreTab />
+        ) : activeTab === 'metrics' ? (
+          <MetricsTab />
+        ) : (
+          <ConfigTab />
         )}
       </div>
 

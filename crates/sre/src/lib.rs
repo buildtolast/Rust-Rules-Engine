@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod dashboard;
 pub mod docker;
 pub mod store;
+pub mod trace_analysis;
 
 use analysis::{AnalysisClient, Finding};
 use chrono::{DateTime, Utc};
@@ -29,6 +30,8 @@ pub struct SreConfig {
     pub scan_interval: Duration,
     pub log_tail_lines: usize,
     pub dashboard_port: u16,
+    pub auto_restart: bool,
+    pub restart_cooldown_secs: u64,
 }
 
 // ── Shared state ────────────────────────────────────────────────────────────
@@ -82,9 +85,12 @@ fn ch_client(cfg: &SreConfig) -> Client {
 
 const MIGRATION_SRE: &str =
     include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
+const MIGRATION_OUTAGES: &str =
+    include_str!("../../../migrations/clickhouse/0004_sre_outages.sql");
 
 async fn run_migration(client: &Client) -> anyhow::Result<()> {
     client.query(MIGRATION_SRE).execute().await?;
+    client.query(MIGRATION_OUTAGES).execute().await?;
     Ok(())
 }
 
@@ -161,6 +167,18 @@ async fn analyze_container(
     tx: &broadcast::Sender<Finding>,
     cfg: &SreConfig,
 ) {
+    // Track running-state transitions — persists outage/restoration events in ClickHouse.
+    // `auto_restarted` is true when the container just came back AND we were the ones
+    // who restarted it (i.e. it was down in prev scan and we acted on it).
+    {
+        let auto_restarted = c.running && store.was_auto_restarted(&c.name);
+        if let Some(ev) = store.update_running_state(&c.name, c.running, auto_restarted) {
+            if let Err(e) = store.write_outage_event(&ev).await {
+                error!("outage event write error: {e}");
+            }
+        }
+    }
+
     // Container is stopped/exited — emit CRITICAL immediately, no LLM needed.
     if !c.running {
         let hash = sha256_hex(&format!("{}:stopped", c.name));
@@ -169,6 +187,37 @@ async fn analyze_container(
             store.record_hash(&c.name, &hash);
             store.record_severity(&c.name, "CRITICAL");
 
+            // Auto-restart if enabled and not on cooldown.
+            let restarted = if cfg.auto_restart {
+                if store.is_restart_on_cooldown(&c.name, cfg.restart_cooldown_secs) {
+                    info!(
+                        "auto-restart suppressed for {} (cooldown {}s)",
+                        c.name, cfg.restart_cooldown_secs
+                    );
+                    false
+                } else {
+                    match docker::restart_container(docker, &c.id).await {
+                        Ok(()) => {
+                            info!("auto-restarted container {}", c.name);
+                            store.record_restart(&c.name);
+                            true
+                        }
+                        Err(e) => {
+                            error!("failed to restart {}: {e}", c.name);
+                            false
+                        }
+                    }
+                }
+            } else {
+                false
+            };
+
+            let fix = if restarted {
+                format!("Container {} was automatically restarted by the SRE agent.", c.name)
+            } else {
+                format!("Restart with: docker start {}", c.name)
+            };
+
             let finding = Finding {
                 severity: "CRITICAL".into(),
                 category: "crash_loop".into(),
@@ -176,7 +225,7 @@ async fn analyze_container(
                     "Container {} is not running (exited/stopped). Service is down.",
                     c.name
                 ),
-                proposed_fix: format!("Restart with: docker start {}", c.name),
+                proposed_fix: fix,
                 container_name: c.name.clone(),
                 observed_at: Some(Utc::now()),
             };

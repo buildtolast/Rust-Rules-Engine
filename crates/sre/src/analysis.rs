@@ -56,11 +56,14 @@ impl AnalysisClient {
     ) -> Result<Finding, AnalysisError> {
         let system_prompt = "You are an SRE agent reviewing container logs for the Rust Rules Engine \
             service stack (Redpanda, ClickHouse, Postgres, rules-engine, sre-agent). \
-            Respond ONLY with a JSON object with these exact keys: \
-            severity (one of INFO|WARN|ERROR|CRITICAL), \
-            category (one of crash_loop|connection_refused|oom|latency|config_error|normal|other), \
-            finding (plain English summary under 300 words), \
-            proposed_fix (plain English proposed action under 200 words, or \"No action required\" for INFO).";
+            Respond ONLY with a valid JSON object. All keys MUST be double-quoted strings. \
+            Example: {\"severity\":\"WARN\",\"category\":\"latency\",\"finding\":\"...\",\"proposed_fix\":\"...\"} \
+            Required keys: \
+            \"severity\" (one of INFO|WARN|ERROR|CRITICAL), \
+            \"category\" (one of crash_loop|connection_refused|oom|latency|config_error|normal|other), \
+            \"finding\" (plain English summary under 300 words), \
+            \"proposed_fix\" (plain English proposed action under 200 words, or \"No action required\" for INFO). \
+            Do not use unquoted keys. Do not add markdown or prose outside the JSON object.";
 
         let user_content = format!(
             "Container: {}\nLog window (last 60 seconds, 200 lines):\n{}",
@@ -131,6 +134,111 @@ impl AnalysisClient {
         let full = format!("{{{content}");
         extract_json(&full)
     }
+
+    /// Send a raw prompt and return the raw LLM text response.
+    pub async fn raw_complete(&self, prompt: &str) -> anyhow::Result<String> {
+        #[derive(serde::Serialize)]
+        struct Req<'a> {
+            model: &'a str,
+            messages: Vec<Msg<'a>>,
+            temperature: f64,
+            max_tokens: u32,
+        }
+        #[derive(serde::Serialize)]
+        struct Msg<'a> {
+            role: &'a str,
+            content: &'a str,
+        }
+        #[derive(serde::Deserialize)]
+        struct Resp {
+            choices: Vec<Choice>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Choice {
+            message: MsgOut,
+        }
+        #[derive(serde::Deserialize)]
+        struct MsgOut {
+            content: String,
+        }
+
+        let req = Req {
+            model: &self.model,
+            messages: vec![Msg { role: "user", content: prompt }],
+            temperature: 0.2,
+            max_tokens: 1024,
+        };
+
+        let mut request = self
+            .http
+            .post(format!("{}/v1/chat/completions", self.base_url))
+            .json(&req);
+        if let Some(key) = &self.api_key {
+            request = request.bearer_auth(key);
+        }
+
+        let resp: Resp = request
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        Ok(resp
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default())
+    }
+}
+
+/// Quote any bare (unquoted) object keys so that JavaScript-style output
+/// from models that ignore the JSON spec can still be parsed.
+/// Only touches keys — values that are already quoted strings are left alone.
+fn quote_bare_keys(s: &str) -> String {
+    // Match an unquoted identifier used as a key: after { or , and before :
+    // Unquoted key: starts at a word boundary, contains only [a-zA-Z0-9_].
+    let mut out = String::with_capacity(s.len() + 16);
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // After { or , skip whitespace then check for a bare key.
+        if bytes[i] == b'{' || bytes[i] == b',' {
+            out.push(bytes[i] as char);
+            i += 1;
+            // Consume whitespace
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+            // If next char is not '"', try to read an identifier
+            if i < bytes.len() && bytes[i] != b'"' && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                // Only treat as bare key if followed (after whitespace) by ':'
+                let end = i;
+                let mut j = i;
+                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                    j += 1;
+                }
+                if j < bytes.len() && bytes[j] == b':' {
+                    out.push('"');
+                    out.push_str(&s[start..end]);
+                    out.push('"');
+                } else {
+                    out.push_str(&s[start..end]);
+                }
+                continue;
+            }
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// Extract the first complete `{...}` JSON object from a string.
@@ -143,14 +251,26 @@ fn extract_json(content: &str) -> Result<Finding, AnalysisError> {
         .rfind('}')
         .ok_or_else(|| AnalysisError::ParseError("unclosed JSON object in LLM response".into()))?;
 
-    let json_slice = &content[start..=end];
-    serde_json::from_str::<Finding>(json_slice)
-        .map_err(|e| AnalysisError::ParseError(format!("{e}: {json_slice}")))
+    let raw = &content[start..=end];
+    // Try strict parse first; fall back to quoting bare keys (some models output JS-style objects).
+    serde_json::from_str::<Finding>(raw).or_else(|_| {
+        let fixed = quote_bare_keys(raw);
+        serde_json::from_str::<Finding>(&fixed)
+            .map_err(|e| AnalysisError::ParseError(format!("{e}: {raw}")))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extract_json_handles_bare_keys() {
+        let js_style = r#"{severity: "WARN", category: "config_error", finding: "bad config", proposed_fix: "fix it"}"#;
+        let f = extract_json(js_style).expect("should parse bare-key JS object");
+        assert_eq!(f.severity, "WARN");
+        assert_eq!(f.category, "config_error");
+    }
 
     #[test]
     fn finding_deserializes_from_valid_json() {

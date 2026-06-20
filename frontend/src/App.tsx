@@ -255,63 +255,30 @@ const App: React.FC = () => {
         </header>
 
         {/* Tab Switcher */}
-        <div className="flex gap-4 mb-8 border-b border-gray-200">
-          <button 
-            onClick={() => setActiveTab('management')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'management' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <Settings size={18} />
-            Rule Management
-          </button>
-          <button 
-            onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'analytics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <TrendingUp size={18} />
-            Analytics Dashboard
-          </button>
-          <button 
-            onClick={() => setActiveTab('simulator')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'simulator' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <Zap size={18} />
-            Traffic Simulator
-          </button>
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'reports' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <FileText size={18} />
-            Compliance Reports
-          </button>
-          <button
-            onClick={() => setActiveTab('sre')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'sre' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <ShieldAlert size={18} />
-            SRE Monitor
-          </button>
-          <button
-            onClick={() => setActiveTab('metrics')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'metrics' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <BarChart2 size={18} />
-            Service Metrics
-          </button>
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'config' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <SlidersHorizontal size={18} />
-            Config & Flags
-          </button>
-          <button
-            onClick={() => setActiveTab('tracing')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'tracing' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <Cpu size={18} />
-            Tracing
-          </button>
+        <div className="flex overflow-x-auto mb-8 border-b border-gray-200 scrollbar-none">
+          {([
+            { id: 'management', label: 'Rules',       icon: <Settings size={16} /> },
+            { id: 'analytics',  label: 'Analytics',   icon: <TrendingUp size={16} /> },
+            { id: 'simulator',  label: 'Simulator',   icon: <Zap size={16} /> },
+            { id: 'reports',    label: 'Compliance',  icon: <FileText size={16} /> },
+            { id: 'sre',        label: 'SRE',         icon: <ShieldAlert size={16} /> },
+            { id: 'metrics',    label: 'Metrics',     icon: <BarChart2 size={16} /> },
+            { id: 'config',     label: 'Config',      icon: <SlidersHorizontal size={16} /> },
+            { id: 'tracing',    label: 'Tracing',     icon: <Cpu size={16} /> },
+          ] as const).map(({ id, label, icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-bold whitespace-nowrap transition-all border-b-2 flex-shrink-0 ${
+                activeTab === id
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
         </div>
 
         {activeTab === 'management' ? (

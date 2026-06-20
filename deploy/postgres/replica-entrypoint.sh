@@ -9,7 +9,7 @@ chmod 0700 "$DATA_DIR"
 
 if [ ! -f "$DATA_DIR/PG_VERSION" ]; then
     echo "[replica] Data directory empty — running pg_basebackup from primary..."
-    until PGPASSWORD=replicator gosu postgres pg_basebackup \
+    until gosu postgres PGPASSWORD=replicator pg_basebackup \
         -h postgres \
         -U replicator \
         -D "$DATA_DIR" \

@@ -166,6 +166,16 @@ pub async fn run(
                 continue;
             }
 
+            let batch_span = tracing::info_span!(
+                "pipeline.batch",
+                "batch.size" = batch.len() as i64,
+                "batch.eval_ms" = tracing::field::Empty,
+                "batch.txn_ms" = tracing::field::Empty,
+                "kafka.lag" = tracing::field::Empty,
+                "audit.count" = tracing::field::Empty,
+            );
+            let _batch_enter = batch_span.enter();
+
             // ── Phase 1: parallel parse + eval (rayon) ────────────────────
             let rules: Arc<Vec<eval::CompiledRule>> = cache.get();
             let schema_version = config.schema_version;
@@ -174,6 +184,7 @@ pub async fn run(
             let msg_evals: Vec<MsgEval> = batch
                 .par_iter()
                 .map(|msg| {
+                    let _parse_span = tracing::debug_span!("event.parse", "kafka.offset" = msg.offset).entered();
                     let parse_start = Instant::now();
                     let event = match rules_core::SourceEvent::from_kafka(
                         &msg.topic,
@@ -246,6 +257,7 @@ pub async fn run(
                 .collect();
 
             let eval_ms = eval_start.elapsed().as_millis();
+            batch_span.record("batch.eval_ms", eval_ms as i64);
 
             // ── Phase 2: EOS transaction (serial) ─────────────────────────
             let txn_start = Instant::now();
@@ -277,6 +289,7 @@ pub async fn run(
             producer.commit_transaction(Duration::from_secs(10))?;
 
             let txn_ms = txn_start.elapsed().as_millis();
+            batch_span.record("batch.txn_ms", txn_ms as i64);
 
             // ── Phase 3: ship audits to ClickHouse ────────────────────────
             let audits: Vec<rules_core::AuditRecord> = msg_evals
@@ -287,6 +300,7 @@ pub async fn run(
                 .collect();
 
             let audit_count = audits.len();
+            batch_span.record("audit.count", audit_count as i64);
             if ch_tx.blocking_send(audits).is_err() {
                 tracing::warn!("ch channel closed, dropping audit batch");
             }
@@ -301,6 +315,7 @@ pub async fn run(
                         .unwrap_or(0)
                 })
                 .sum();
+            batch_span.record("kafka.lag", lag);
 
             counters.record_batch(batch.len() as u64, eval_ms as u64, txn_ms as u64, lag);
 

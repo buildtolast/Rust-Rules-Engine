@@ -234,6 +234,8 @@ services:
       CONSUMER_GROUP: ${CONSUMER_GROUP:-rules-engine}
       HTTP_PORT: 8080
       RUST_LOG: ${RUST_LOG:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-0.1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -263,7 +265,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.sre
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_DB: ruleaudit
@@ -272,9 +274,13 @@ services:
       LLM_BASE_URL: http://host.docker.internal:8888
       LLM_MODEL: ${LLM_MODEL:-unsloth}
       LLM_API_KEY: ${UNSLOTH_API_KEY:-}
-      SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-60}
+      SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-5}
       LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
+      AUTO_RESTART: ${AUTO_RESTART:-false}
+      RESTART_COOLDOWN_SECS: ${RESTART_COOLDOWN_SECS:-300}
       RUST_LOG: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-1.0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

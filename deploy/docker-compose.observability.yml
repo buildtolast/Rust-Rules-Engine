@@ -1,0 +1,75 @@
+# Observability overlay — run alongside the main compose to enable SigNoz:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.observability.yml up -d
+#
+# SigNoz UI: http://localhost:3301
+# Switch backend: change OTEL_EXPORTER_OTLP_ENDPOINT in deploy/docker-compose.yml
+
+name: rre-obs
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    container_name: rre-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - signoz-otelcollector
+    networks:
+      - rre_default
+
+  signoz-clickhouse:
+    image: clickhouse/clickhouse-server:24.1.2-alpine
+    container_name: rre-signoz-clickhouse
+    environment:
+      CLICKHOUSE_DB: signoz_metrics
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: 27ff0399-0d3a-4bd8-919d-17c2181e6fb9
+    volumes:
+      - rre-signoz-ch-data:/var/lib/clickhouse
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - rre_default
+
+  signoz-otelcollector:
+    image: signoz/signoz-otel-collector:0.111.25
+    container_name: rre-signoz-otelcollector
+    environment:
+      CLICKHOUSE_URL: tcp://signoz-clickhouse:9000
+    depends_on:
+      signoz-clickhouse:
+        condition: service_started
+    networks:
+      - rre_default
+
+  signoz:
+    image: signoz/signoz:0.55.0
+    container_name: rre-signoz
+    environment:
+      STORAGE: clickhouse
+      ClickHouseUrl: http://admin:27ff0399-0d3a-4bd8-919d-17c2181e6fb9@signoz-clickhouse:8123
+      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
+    ports:
+      - "3301:3301"
+    volumes:
+      - rre-signoz-data:/var/lib/signoz
+    depends_on:
+      - signoz-clickhouse
+      - signoz-otelcollector
+    networks:
+      - rre_default
+
+volumes:
+  rre-signoz-ch-data:
+  rre-signoz-data:
+
+networks:
+  rre_default:
+    external: true
+    name: rre_default

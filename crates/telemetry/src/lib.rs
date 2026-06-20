@@ -11,11 +11,16 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Returned by `init` — shuts down the OTEL tracer provider on drop.
-pub struct ShutdownGuard;
+#[must_use = "dropping ShutdownGuard immediately shuts down the OTEL exporter"]
+pub struct ShutdownGuard {
+    provider: opentelemetry_sdk::trace::TracerProvider,
+}
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        global::shutdown_tracer_provider();
+        if let Err(e) = self.provider.shutdown() {
+            eprintln!("OTEL shutdown error: {e}");
+        }
     }
 }
 
@@ -24,19 +29,22 @@ impl Drop for ShutdownGuard {
 /// Backend is controlled by `OTEL_EXPORTER_OTLP_ENDPOINT` env var
 /// (default: `http://localhost:4317`). Swap endpoint to switch backends.
 /// Sampling rate controlled by `OTEL_SAMPLE_RATE` (default: 0.1 = 10%).
-pub fn init(service_name: &'static str) -> ShutdownGuard {
+pub fn init(service_name: &str) -> ShutdownGuard {
     let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".into());
 
-    let sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0.1);
+    let sample_rate: f64 = match std::env::var("OTEL_SAMPLE_RATE") {
+        Ok(v) => v.parse().unwrap_or_else(|_| {
+            eprintln!("WARN: OTEL_SAMPLE_RATE={v:?} is not a valid f64, using default 0.1");
+            0.1
+        }),
+        Err(_) => 0.1,
+    };
 
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let resource = Resource::new(vec![
-        opentelemetry::KeyValue::new("service.name", service_name),
+        opentelemetry::KeyValue::new("service.name", service_name.to_string()),
         opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
     ]);
 
@@ -55,10 +63,10 @@ pub fn init(service_name: &'static str) -> ShutdownGuard {
         .build();
 
     // Get an SDK tracer (implements PreSampledTracer, required by OpenTelemetryLayer).
-    let tracer = provider.tracer(service_name);
+    let tracer = provider.tracer(service_name.to_string());
 
     // Register as global provider so application code can use `global::tracer(...)`.
-    global::set_tracer_provider(provider);
+    global::set_tracer_provider(provider.clone());
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
@@ -66,5 +74,5 @@ pub fn init(service_name: &'static str) -> ShutdownGuard {
         .with(OpenTelemetryLayer::new(tracer))
         .init();
 
-    ShutdownGuard
+    ShutdownGuard { provider }
 }

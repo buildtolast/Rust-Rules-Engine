@@ -26,6 +26,7 @@ use axum::{
 };
 use rdkafka::producer::FutureProducer;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
 
 /// Shared application state injected into every handler via axum's `State` extractor.
 #[derive(Clone)]
@@ -65,6 +66,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reports/export", get(routes::reports::export))
         .route("/api/metrics", get(routes::metrics::metrics))
         .route("/api/simulation/push", post(routes::simulation::push))
+        .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)
 }

@@ -15,7 +15,7 @@ sqlx              = { version = "0.9", default-features = false, features = ["ru
 clickhouse        = { version = "0.15.1", features = ["inserter", "chrono"] }
 axum              = { workspace = true }
 tower             = { workspace = true }
-tower-http        = { workspace = true }
+tower-http        = { workspace = true, features = ["trace"] }
 tokio             = { workspace = true }
 serde             = { workspace = true }
 serde_json        = { workspace = true }

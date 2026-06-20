@@ -120,6 +120,15 @@ Limit each array to 5 items. Be specific — name rule IDs and techniques."#
     )
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn strip_fences(s: &str) -> &str {
+    let s = s.trim();
+    let s = s.strip_prefix("```json").or_else(|| s.strip_prefix("```")).unwrap_or(s);
+    let s = s.strip_suffix("```").unwrap_or(s);
+    s.trim()
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights {
@@ -171,21 +180,18 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
 
     let (llm_insights, llm_bottlenecks, llm_recommendations, llm_available) =
         match llm.raw_complete(&prompt).await {
-            Ok(raw) => match serde_json::from_str::<LlmResponse>(&raw) {
-                Ok(resp) => (resp.insights, resp.top_bottlenecks, resp.recommendations, true),
-                Err(e) => {
-                    warn!(
-                        "trace_analysis: LLM JSON parse failed: {e}. Raw: {}",
-                        &raw[..raw.len().min(100)]
-                    );
-                    (
-                        vec!["LLM response unparseable".into()],
-                        vec![],
-                        vec![],
-                        true,
-                    )
+            Ok(raw) => {
+                // Strip markdown fences that local LLMs often emit despite instructions.
+                let json = strip_fences(&raw);
+                match serde_json::from_str::<LlmResponse>(json) {
+                    Ok(resp) => (resp.insights, resp.top_bottlenecks, resp.recommendations, true),
+                    Err(e) => {
+                        let preview: String = raw.chars().take(100).collect();
+                        warn!("trace_analysis: LLM JSON parse failed: {e}. Raw: {preview}");
+                        (vec!["LLM response unparseable".into()], vec![], vec![], true)
+                    }
                 }
-            },
+            }
             Err(e) => {
                 warn!("trace_analysis: LLM call failed: {e}");
                 (vec!["Local LLM unavailable".into()], vec![], vec![], false)

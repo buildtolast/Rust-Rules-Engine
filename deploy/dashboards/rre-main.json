@@ -1,0 +1,503 @@
+{
+  "data": {
+    "uuid": "b4f8c2a1-3e7d-4f90-8c5b-1a2e3d4f5a6b",
+    "title": "Rules Engine — Production Overview",
+    "description": "Full observability for rules-engine and sre-agent: RED metrics, pipeline throughput, ClickHouse/Postgres dependency health, and SRE findings. Queries run against signoz_traces.distributed_signoz_index_v3.",
+    "tags": ["rules-engine", "sre", "production", "rre"],
+    "variables": {},
+    "panelMap": {},
+    "layout": [
+      { "h": 2, "i": "stat-total-spans",   "w": 3, "x": 0,  "y": 0  },
+      { "h": 2, "i": "stat-error-rate",    "w": 3, "x": 3,  "y": 0  },
+      { "h": 2, "i": "stat-p99-latency",   "w": 3, "x": 6,  "y": 0  },
+      { "h": 2, "i": "stat-avg-latency",   "w": 3, "x": 9,  "y": 0  },
+      { "h": 4, "i": "graph-request-rate", "w": 6, "x": 0,  "y": 2  },
+      { "h": 4, "i": "graph-latency-pct",  "w": 6, "x": 6,  "y": 2  },
+      { "h": 4, "i": "graph-error-rate",   "w": 6, "x": 0,  "y": 6  },
+      { "h": 4, "i": "graph-ch-ops",       "w": 6, "x": 6,  "y": 6  },
+      { "h": 4, "i": "graph-http-resp",    "w": 6, "x": 0,  "y": 10 },
+      { "h": 4, "i": "graph-sre-activity", "w": 6, "x": 6,  "y": 10 },
+      { "h": 4, "i": "table-top-ops",      "w": 12, "x": 0, "y": 14 },
+      { "h": 4, "i": "graph-span-kinds",   "w": 6, "x": 0,  "y": 18 },
+      { "h": 4, "i": "graph-throughput",   "w": 6, "x": 6,  "y": 18 }
+    ],
+    "widgets": [
+
+      {
+        "id": "stat-total-spans",
+        "title": "Total Spans",
+        "description": "Total spans ingested across rules-engine and sre-agent in the selected time window.",
+        "panelTypes": "value",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "spans",
+              "disabled": false,
+              "query": "SELECT toFloat64(count()) as value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}}"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "stat-error-rate",
+        "title": "Error Rate (%)",
+        "description": "Percentage of spans with statusCode = 2 (OTEL Error) across both services.",
+        "panelTypes": "value",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 100,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "percent",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "error %",
+              "disabled": false,
+              "query": "SELECT round(countIf(statusCode = 2) / count() * 100, 2) as value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}}"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "stat-p99-latency",
+        "title": "P99 Latency (ms)",
+        "description": "99th-percentile span duration across all operations for both services.",
+        "panelTypes": "value",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "p99 ms",
+              "disabled": false,
+              "query": "SELECT round(quantile(0.99)(durationNano) / 1e6, 2) as value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}}"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "stat-avg-latency",
+        "title": "Avg Latency (ms)",
+        "description": "Mean span duration across all operations for both services.",
+        "panelTypes": "value",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "avg ms",
+              "disabled": false,
+              "query": "SELECT round(avg(durationNano) / 1e6, 2) as value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}}"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-request-rate",
+        "title": "Span Rate by Service (per minute)",
+        "description": "Number of spans emitted per minute, broken down by service. Proxy for request throughput.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "rules-engine",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "sre-agent",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-latency-pct",
+        "title": "Latency Percentiles — All Services (ms)",
+        "description": "P50, P95, P99 span duration over time. Spike in P99 with flat P50 = outlier operations; both spiking = systemic slowdown.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "P50",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(quantile(0.50)(durationNano) / 1e6, 2) as p50_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "P95",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(quantile(0.95)(durationNano) / 1e6, 2) as p95_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "C",
+              "legend": "P99",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(quantile(0.99)(durationNano) / 1e6, 2) as p99_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-error-rate",
+        "title": "Error Rate over Time (%) by Service",
+        "description": "Percentage of spans marked as OTEL Error status per minute, per service. Zero is the goal.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 100,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "percent",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "rules-engine",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(countIf(statusCode = 2) / count() * 100, 2) as error_pct FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "sre-agent",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(countIf(statusCode = 2) / count() * 100, 2) as error_pct FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-ch-ops",
+        "title": "ClickHouse Operation Latency (ms)",
+        "description": "Avg latency for clickhouse.query and clickhouse.insert spans. High insert latency in sre-agent means observation writes are lagging.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "rre-query avg",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'clickhouse.query' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "sre-query avg",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'clickhouse.query' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "C",
+              "legend": "sre-insert avg",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'clickhouse.insert' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-http-resp",
+        "title": "HTTP Response Latency by Service (ms)",
+        "description": "Avg and P95 latency for 'response' spans — the HTTP layer for both services. Covers health, readiness, rules CRUD, metrics, analytics, and simulation endpoints.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "rre avg",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'response' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "rre p95",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(quantile(0.95)(durationNano) / 1e6, 2) as p95_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'response' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "C",
+              "legend": "sre avg",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'response' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "D",
+              "legend": "sre p95",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(quantile(0.95)(durationNano) / 1e6, 2) as p95_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'response' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-sre-activity",
+        "title": "SRE Agent — Scan Activity",
+        "description": "ClickHouse writes per minute from sre-agent (each write = one scan cycle persisting findings). Gap = scan stalled. High insert latency = ClickHouse pressure.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "inserts/min",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as inserts FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'clickhouse.insert' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "queries/min",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as queries FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'sre-agent' AND name = 'clickhouse.query' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "table-top-ops",
+        "title": "Top Operations by P95 Latency",
+        "description": "All span names ranked by P95 duration. Use this to identify slow operations. 'errors' = spans with OTEL statusCode=2.",
+        "panelTypes": "table",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "",
+              "disabled": false,
+              "query": "SELECT serviceName as service, name as operation, count() as calls, round(avg(durationNano) / 1e6, 2) as avg_ms, round(quantile(0.50)(durationNano) / 1e6, 2) as p50_ms, round(quantile(0.95)(durationNano) / 1e6, 2) as p95_ms, round(quantile(0.99)(durationNano) / 1e6, 2) as p99_ms, round(max(durationNano) / 1e6, 2) as max_ms, countIf(statusCode = 2) as errors FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY service, operation ORDER BY p95_ms DESC LIMIT 25"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-span-kinds",
+        "title": "Span Volume by Kind",
+        "description": "Server spans = HTTP requests handled. Client spans = outbound calls. Consumer spans = Kafka messages consumed. Internal = utility operations.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "Internal",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND spanKind = 'Internal' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "Server",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND spanKind = 'Server' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "C",
+              "legend": "Client",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND spanKind = 'Client' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "D",
+              "legend": "Consumer",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, count() as spans FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName IN ('rules-engine', 'sre-agent') AND spanKind = 'Consumer' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "graph-throughput",
+        "title": "Pipeline Batch Throughput",
+        "description": "Spans from pipeline.batch and event.parse operations (rules-engine Kafka consumer). Absence = no Kafka traffic or spans not yet flowing. Each pipeline.batch span covers one Redpanda fetch cycle.",
+        "panelTypes": "graph",
+        "isStacked": false,
+        "fillSpans": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "ms",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": [
+            {
+              "name": "A",
+              "legend": "pipeline.batch avg ms",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'pipeline.batch' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "B",
+              "legend": "event.parse avg ms",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'event.parse' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            },
+            {
+              "name": "C",
+              "legend": "flush avg ms",
+              "disabled": false,
+              "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) as ts, round(avg(durationNano) / 1e6, 2) as avg_ms FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'rules-engine' AND name = 'flush' AND toUnixTimestamp64Nano(timestamp) >= {{.start_timestamp}} AND toUnixTimestamp64Nano(timestamp) <= {{.end_timestamp}} GROUP BY ts ORDER BY ts"
+            }
+          ]
+        }
+      }
+
+    ]
+  }
+}

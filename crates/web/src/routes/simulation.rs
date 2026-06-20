@@ -51,7 +51,7 @@ pub async fn push(
     let topic = s.source_topic.clone();
 
     tokio::spawn(async move {
-        let per_task = (count + senders - 1) / senders;
+        let per_task = count.div_ceil(senders);
         let mut handles = Vec::with_capacity(senders);
 
         for t in 0..senders {

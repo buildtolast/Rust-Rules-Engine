@@ -132,7 +132,7 @@ async fn check_kafka_health(s: &AppState) -> bool {
     use tokio::net::TcpStream;
     let broker = s.kafka_brokers.split(',').next().unwrap_or("").to_string();
     // Replace internal Docker hostname with localhost for inter-container check
-    let addr = broker.replace("redpanda", "redpanda");
+    let addr = broker;
     tokio::time::timeout(std::time::Duration::from_secs(2), TcpStream::connect(&addr))
         .await
         .map(|r| r.is_ok())

@@ -12,6 +12,12 @@ pub struct PipelineCounters {
     pub started_at: Instant,
 }
 
+impl Default for PipelineCounters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PipelineCounters {
     pub fn new() -> Self {
         Self {

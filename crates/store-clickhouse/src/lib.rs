@@ -140,6 +140,11 @@ impl AuditWriter {
         }
     }
 
+    /// Buffer a single record; flushes automatically when the buffer is full.
+    pub async fn write(&mut self, rec: &AuditRecord) -> Result<(), Error> {
+        self.write_batch(std::slice::from_ref(rec)).await
+    }
+
     /// Buffer a batch of records; flushes automatically when the buffer is full.
     pub async fn write_batch(&mut self, recs: &[AuditRecord]) -> Result<(), Error> {
         for rec in recs {

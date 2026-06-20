@@ -6,3 +6,13 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+pipeline         = { path = "../../crates/pipeline" }
+web              = { path = "../../crates/web" }
+store-postgres   = { path = "../../crates/store-postgres" }
+store-clickhouse = { path = "../../crates/store-clickhouse" }
+tokio            = { workspace = true }
+tracing          = { workspace = true }
+tracing-subscriber = { workspace = true }
+rdkafka          = { workspace = true }
+axum             = { workspace = true }
+anyhow           = "1"

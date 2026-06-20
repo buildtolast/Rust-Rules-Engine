@@ -6,3 +6,20 @@ version = "0.0.0"
 publish = false
 
 [dependencies]
+rules-core        = { path = "../core" }
+eval              = { path = "../eval" }
+store-postgres    = { path = "../store-postgres" }
+store-clickhouse  = { path = "../store-clickhouse" }
+arc-swap          = { workspace = true }
+tokio             = { workspace = true }
+thiserror         = { workspace = true }
+tracing           = { workspace = true }
+rdkafka           = { workspace = true }
+serde_json        = { workspace = true }
+chrono            = { workspace = true }
+rayon             = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+store-postgres = { path = "../store-postgres" }
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres"] }

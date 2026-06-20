@@ -1,0 +1,16 @@
+FROM rust:1.94-slim AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+# Intentionally NOT copying rust-toolchain.toml — the image already has 1.94
+# and copying it triggers rustup channel sync (TLS issues in some Docker environments)
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY bin/ bin/
+COPY migrations/ migrations/
+
+RUN cargo build --release -p sre-agent
+
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/target/release/sre-agent /usr/local/bin/
+CMD ["sre-agent"]

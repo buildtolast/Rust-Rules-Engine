@@ -1,4 +1,11 @@
-//! store-clickhouse — batched audit writer + migrations (S3)
+//! store-clickhouse — batched audit writer, migrations (S3), analytics queries (S4)
+
+pub mod analytics;
+pub use analytics::{
+    query_analytics, query_top_audits, AnalyticsStats, AuditQueryRow, RuleStat, TimeSeriesPoint,
+};
+pub use clickhouse;
+pub use clickhouse::Client as ClickHouseClient;
 
 use chrono::{DateTime, Utc};
 use clickhouse::Client;
@@ -43,10 +50,30 @@ pub fn client(cfg: &ClickHouseConfig) -> Client {
         .with_password(&cfg.password)
 }
 
+pub async fn ping(client: &Client) -> bool {
+    #[derive(clickhouse::Row, serde::Deserialize)]
+    struct One {
+        #[serde(rename = "1")]
+        _v: u8,
+    }
+    client.query("SELECT 1").fetch_one::<One>().await.is_ok()
+}
+
 pub const MIGRATION_AUDITS: &str = include_str!("../../../migrations/clickhouse/0001_audits.sql");
+pub const MIGRATION_SRE: &str =
+    include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
+pub const MIGRATION_ANALYTICS: &str =
+    include_str!("../../../migrations/clickhouse/0003_analytics.sql");
 
 pub async fn run_migrations(client: &Client) -> Result<(), Error> {
     client.query(MIGRATION_AUDITS).execute().await?;
+    client.query(MIGRATION_SRE).execute().await?;
+    for stmt in MIGRATION_ANALYTICS.split(";\n\n") {
+        let stmt = stmt.trim();
+        if !stmt.is_empty() {
+            client.query(stmt).execute().await?;
+        }
+    }
     Ok(())
 }
 
@@ -99,27 +126,50 @@ impl AuditRow {
 }
 
 pub struct AuditWriter {
-    inserter: clickhouse::inserter::Inserter<AuditRow>,
+    client: Client,
+    buffer: Vec<AuditRow>,
+    batch_max: usize,
 }
 
 impl AuditWriter {
     pub fn new(client: &Client, cfg: &ClickHouseConfig) -> Self {
-        let mut inserter = client.inserter::<AuditRow>("audits");
-        inserter = inserter.with_max_rows(cfg.batch_max_rows);
-        inserter =
-            inserter.with_period(Some(std::time::Duration::from_millis(cfg.batch_period_ms)));
-        Self { inserter }
+        Self {
+            client: client.clone(),
+            buffer: Vec::with_capacity(cfg.batch_max_rows as usize),
+            batch_max: cfg.batch_max_rows as usize,
+        }
     }
 
+    /// Buffer a single record; flushes automatically when the buffer is full.
     pub async fn write(&mut self, rec: &AuditRecord) -> Result<(), Error> {
-        let row = AuditRow::from_record(rec);
-        self.inserter.write(&row).await?;
-        self.inserter.commit().await?;
+        self.write_batch(std::slice::from_ref(rec)).await
+    }
+
+    /// Buffer a batch of records; flushes automatically when the buffer is full.
+    pub async fn write_batch(&mut self, recs: &[AuditRecord]) -> Result<(), Error> {
+        for rec in recs {
+            self.buffer.push(AuditRow::from_record(rec));
+        }
+        if self.buffer.len() >= self.batch_max {
+            self.flush().await?;
+        }
         Ok(())
     }
 
-    pub async fn end(self) -> Result<(), Error> {
-        self.inserter.end().await?;
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        let mut insert = self.client.insert::<AuditRow>("audits").await?;
+        for row in &self.buffer {
+            insert.write(row).await?;
+        }
+        insert.end().await?;
+        self.buffer.clear();
         Ok(())
+    }
+
+    pub async fn end(mut self) -> Result<(), Error> {
+        self.flush().await
     }
 }

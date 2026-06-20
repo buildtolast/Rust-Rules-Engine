@@ -1,32 +1,126 @@
+name: rre   # container names: rre-<service>[-N]
+
 services:
-  redpanda:
+
+  # ── Redpanda — 3-node cluster, RF=2 ─────────────────────────────────────────
+  # Losing any one broker leaves all partitions with ≥1 replica.
+
+  redpanda-0:
     image: redpandadata/redpanda:v24.2.7
-    container_name: rre-redpanda
+    container_name: rre-redpanda-0
     command:
       - redpanda start
-      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:${REDPANDA_PORT:-19092}
-      - --advertise-kafka-addr=internal://redpanda:9092,external://host.docker.internal:${REDPANDA_PORT:-19092}
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda-0:9092,external://host.docker.internal:${REDPANDA_PORT:-19092}
       - --rpc-addr=0.0.0.0:33145
-      - --advertise-rpc-addr=redpanda:33145
-      - --mode=dev-container
+      - --advertise-rpc-addr=redpanda-0:33145
+      - --seeds=redpanda-0:33145,redpanda-1:33145,redpanda-2:33145
       - --smp=1
       - --memory=1G
       - --reserve-memory=0M
       - --overprovisioned
+      - --unsafe-bypass-fsync=true
+      - --default-log-level=warn
+    volumes:
+      - rre-redpanda-0-data:/var/lib/redpanda/data
     ports:
-      - "${REDPANDA_PORT:-19092}:${REDPANDA_PORT:-19092}"
+      - "${REDPANDA_PORT:-19092}:19092"
       - "${REDPANDA_ADMIN_PORT:-9644}:9644"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    deploy:
-      resources:
-        limits:
-          memory: ${REDPANDA_MEM_LIMIT:-1500M}
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster info --brokers localhost:9092 || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 12
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+
+  redpanda-1:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: rre-redpanda-1
+    command:
+      - redpanda start
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda-1:9092
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda-1:33145
+      - --seeds=redpanda-0:33145,redpanda-1:33145,redpanda-2:33145
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --unsafe-bypass-fsync=true
+      - --default-log-level=warn
+    volumes:
+      - rre-redpanda-1-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+
+  redpanda-2:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: rre-redpanda-2
+    command:
+      - redpanda start
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda-2:9092
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda-2:33145
+      - --seeds=redpanda-0:33145,redpanda-1:33145,redpanda-2:33145
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --unsafe-bypass-fsync=true
+      - --default-log-level=warn
+    volumes:
+      - rre-redpanda-2-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+
+  # One-shot: creates topics with RF=2 once all brokers are healthy.
+  redpanda-init:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: rre-redpanda-init
+    depends_on:
+      redpanda-0:
+        condition: service_healthy
+      redpanda-1:
+        condition: service_healthy
+      redpanda-2:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        BROKERS="redpanda-0:9092,redpanda-1:9092,redpanda-2:9092"
+        rpk topic create source-events -p 6 -r 3 --brokers "$$BROKERS" 2>/dev/null || true
+        rpk topic create target-events -p 6 -r 3 --brokers "$$BROKERS" 2>/dev/null || true
+        echo "Topics ready (source-events, target-events, RF=3, 6 partitions)"
+    restart: "no"
+
+  # ── ClickHouse ───────────────────────────────────────────────────────────────
+  # Known SPOF: Keeper cluster (3+ nodes) required for ClickHouse HA — out of
+  # scope for compose. ClickHouse is very stable; operator can recover from
+  # its persistent volume.
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
@@ -45,38 +139,182 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     volumes:
       - rre-clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/memory.xml:ro
     deploy:
       resources:
         limits:
-          memory: ${CLICKHOUSE_MEM_LIMIT:-2G}
+          memory: ${CLICKHOUSE_MEM_LIMIT:-4G}
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 12
 
+  # ── PostgreSQL — primary + streaming replica ──────────────────────────────────
+  # Primary handles all writes. Replica is a hot standby (read-only).
+  # Failover: `docker exec rre-postgres-replica psql -U rules -c 'SELECT pg_promote()'`
+  # then update DATABASE_URL in the app to point to the replica.
+
   postgres:
     image: postgres:16
     container_name: rre-postgres
-    command: ["postgres", "-p", "${POSTGRES_PORT:-5432}"]
-    ports:
-      - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+    command:
+      - postgres
+      - -p
+      - "${POSTGRES_PORT:-5432}"
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=3
+      - -c
+      - wal_keep_size=64
+      - -c
+      - hot_standby=on
     environment:
       POSTGRES_DB: ruleaudit
       POSTGRES_USER: rules
       POSTGRES_PASSWORD: rules
     volumes:
       - rre-postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/01-replication.sh
+    ports:
+      - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
     deploy:
       resources:
         limits:
-          memory: ${POSTGRES_MEM_LIMIT:-512M}
+          memory: ${POSTGRES_MEM_LIMIT:-256M}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -p ${POSTGRES_PORT:-5432} -U rules || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -p ${POSTGRES_PORT:-5432} -U rules -d ruleaudit || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 12
 
+  postgres-replica:
+    image: postgres:16
+    container_name: rre-postgres-replica
+    entrypoint: ["/bin/bash", "/replica-entrypoint.sh"]
+    environment:
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+    volumes:
+      - rre-postgres-replica-data:/var/lib/postgresql/data
+      - ./postgres/replica-entrypoint.sh:/replica-entrypoint.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEM_LIMIT:-256M}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p ${POSTGRES_PORT:-5432} -U rules -d ruleaudit || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ── Rules Engine — 2 replicas ────────────────────────────────────────────────
+  # Each replica gets a unique Kafka transactional ID via $HOSTNAME (container ID).
+  # Same consumer group = Kafka auto-rebalances partitions on instance failure.
+  # nginx DNS round-robins across replicas.
+
+  app:
+    image: rre/rules-engine:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    environment:
+      DATABASE_URL: postgres://rules:rules@postgres:${POSTGRES_PORT:-5432}/ruleaudit
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: ruleaudit
+      CLICKHOUSE_USER: rules
+      CLICKHOUSE_PASSWORD: rules
+      KAFKA_BROKERS: redpanda-0:9092,redpanda-1:9092,redpanda-2:9092
+      SOURCE_TOPIC: ${SOURCE_TOPIC:-source-events}
+      TARGET_TOPIC: ${TARGET_TOPIC:-target-events}
+      CONSUMER_GROUP: ${CONSUMER_GROUP:-rules-engine}
+      HTTP_PORT: 8080
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: ${APP_MEM_LIMIT:-512M}
+
+  # ── SRE Agent — 2 replicas ───────────────────────────────────────────────────
+  # Both replicas scan all containers; findings are deduped in ClickHouse
+  # (GROUP BY container_name, log_window_hash). The REST /findings endpoint
+  # queries ClickHouse so all replicas return the same data.
+
+  sre-agent:
+    image: rre/sre-agent:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.sre
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: ruleaudit
+      CLICKHOUSE_USER: rules
+      CLICKHOUSE_PASSWORD: rules
+      LLM_BASE_URL: http://host.docker.internal:8888
+      LLM_MODEL: ${LLM_MODEL:-unsloth}
+      LLM_API_KEY: ${UNSLOTH_API_KEY:-}
+      SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-60}
+      LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
+      RUST_LOG: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8088/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: ${SRE_MEM_LIMIT:-256M}
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+
+  frontend:
+    image: rre/frontend:latest
+    container_name: rre-frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      NGINX_PORT: 80
+    depends_on:
+      sre-agent:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEM_LIMIT:-64M}
+
 volumes:
+  rre-redpanda-0-data:
+  rre-redpanda-1-data:
+  rre-redpanda-2-data:
   rre-clickhouse-data:
   rre-postgres-data:
+  rre-postgres-replica-data:

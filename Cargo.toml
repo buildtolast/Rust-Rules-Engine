@@ -7,7 +7,9 @@ members = [
     "crates/store-postgres",
     "crates/pipeline",
     "crates/web",
+    "crates/sre",
     "bin/rules-engine",
+    "bin/sre-agent",
 ]
 
 [workspace.package]
@@ -24,3 +26,12 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 cel-interpreter = { version = "0.10.0", features = ["json"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+arc-swap = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rdkafka = { version = "0.36", features = ["tokio"] }
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.6", features = ["cors"] }
+uuid = { version = "1", features = ["v4"] }
+rayon = "1"

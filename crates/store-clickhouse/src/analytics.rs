@@ -1,7 +1,7 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use clickhouse::{Client, Row};
 use crate::Error;
+use chrono::{DateTime, Utc};
+use clickhouse::{Client, Row};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
 struct MsgCount {

@@ -42,7 +42,10 @@ pub fn router(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(routes::health::health))
-        .route("/api/rules", get(routes::rules::list).post(routes::rules::create))
+        .route(
+            "/api/rules",
+            get(routes::rules::list).post(routes::rules::create),
+        )
         .route(
             "/api/rules/:id",
             get(routes::rules::get_one)

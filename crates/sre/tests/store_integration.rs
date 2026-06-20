@@ -19,14 +19,14 @@ async fn dedup_same_hash_keeps_one_row() {
     let mut store = SreStore::new(&client);
 
     let obs = SreObservation {
-        observed_at:     Utc::now(),
-        container_name:  "test-container".into(),
-        severity:        "INFO".into(),
-        category:        "normal".into(),
-        finding:         "all good".into(),
-        proposed_fix:    "No action required".into(),
+        observed_at: Utc::now(),
+        container_name: "test-container".into(),
+        severity: "INFO".into(),
+        category: "normal".into(),
+        finding: "all good".into(),
+        proposed_fix: "No action required".into(),
         log_window_hash: "dedup-test-hash-12345".into(),
-        log_snippet:     "log line 1\nlog line 2".into(),
+        log_snippet: "log line 1\nlog line 2".into(),
     };
 
     // Write the same observation twice — ReplacingMergeTree should keep one row

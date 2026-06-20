@@ -16,7 +16,7 @@ use tokio_stream::wrappers::BroadcastStream;
 #[derive(Clone)]
 struct AppState {
     state: Arc<RwLock<SreState>>,
-    tx:    broadcast::Sender<Finding>,
+    tx: broadcast::Sender<Finding>,
 }
 
 async fn index(State(app): State<AppState>) -> Html<String> {
@@ -61,7 +61,7 @@ async fn findings(State(app): State<AppState>) -> Json<Vec<Finding>> {
 async fn findings_sse(
     State(app): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx     = app.tx.subscribe();
+    let rx = app.tx.subscribe();
     let stream = BroadcastStream::new(rx)
         .filter_map(|r| async move { r.ok() })
         .map(|f| {
@@ -76,11 +76,7 @@ async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({"ok": true}))
 }
 
-pub async fn serve(
-    state: Arc<RwLock<SreState>>,
-    tx:    broadcast::Sender<Finding>,
-    port:  u16,
-) {
+pub async fn serve(state: Arc<RwLock<SreState>>, tx: broadcast::Sender<Finding>, port: u16) {
     let app_state = AppState { state, tx };
 
     let router = Router::new()
@@ -96,5 +92,7 @@ pub async fn serve(
         .expect("failed to bind dashboard port");
 
     tracing::info!("SRE dashboard listening on http://0.0.0.0:{port}");
-    axum::serve(listener, router).await.expect("dashboard server error");
+    axum::serve(listener, router)
+        .await
+        .expect("dashboard server error");
 }

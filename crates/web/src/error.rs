@@ -27,7 +27,10 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ApiError::Postgres(_) | ApiError::ClickHouse(_) | ApiError::Kafka(_) => {
                 tracing::error!("internal error: {self}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal server error".into())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".into(),
+                )
             }
         };
         (status, Json(json!({ "error": message }))).into_response()

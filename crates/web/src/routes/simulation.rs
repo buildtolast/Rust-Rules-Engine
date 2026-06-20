@@ -46,7 +46,10 @@ pub async fn push(
 
     Ok(Json(PushResult {
         count,
-        message: format!("publishing {count} events to {} in background", s.source_topic),
+        message: format!(
+            "publishing {count} events to {} in background",
+            s.source_topic
+        ),
     }))
 }
 

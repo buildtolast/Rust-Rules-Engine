@@ -18,45 +18,45 @@ use tracing::{error, info, warn};
 // ── Config ─────────────────────────────────────────────────────────────────
 
 pub struct SreConfig {
-    pub clickhouse_url:    String,
-    pub clickhouse_db:     String,
-    pub clickhouse_user:   String,
-    pub clickhouse_pass:   String,
-    pub llm_base_url:      String,
-    pub llm_model:         String,
-    pub llm_api_key:       Option<String>,
-    pub scan_interval:     Duration,
-    pub log_tail_lines:    usize,
-    pub dashboard_port:    u16,
+    pub clickhouse_url: String,
+    pub clickhouse_db: String,
+    pub clickhouse_user: String,
+    pub clickhouse_pass: String,
+    pub llm_base_url: String,
+    pub llm_model: String,
+    pub llm_api_key: Option<String>,
+    pub scan_interval: Duration,
+    pub log_tail_lines: usize,
+    pub dashboard_port: u16,
 }
 
 // ── Shared state ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ContainerStatus {
-    pub name:            String,
-    pub id:              String,
-    pub running:         bool,
-    pub started_at:      Option<DateTime<Utc>>,
-    pub health:          docker::HealthSummary,
+    pub name: String,
+    pub id: String,
+    pub running: bool,
+    pub started_at: Option<DateTime<Utc>>,
+    pub health: docker::HealthSummary,
     pub last_checked_at: DateTime<Utc>,
-    pub last_severity:   Option<String>,
+    pub last_severity: Option<String>,
 }
 
 #[derive(serde::Serialize)]
 pub struct SreState {
-    pub containers:    Vec<ContainerStatus>,
-    pub findings:      VecDeque<Finding>,
-    pub last_scan_at:  Option<DateTime<Utc>>,
+    pub containers: Vec<ContainerStatus>,
+    pub findings: VecDeque<Finding>,
+    pub last_scan_at: Option<DateTime<Utc>>,
     pub llm_available: bool,
 }
 
 impl SreState {
     fn new() -> Self {
         Self {
-            containers:    Vec::new(),
-            findings:      VecDeque::new(),
-            last_scan_at:  None,
+            containers: Vec::new(),
+            findings: VecDeque::new(),
+            last_scan_at: None,
             llm_available: false,
         }
     }
@@ -96,30 +96,36 @@ fn sha256_hex(s: &str) -> String {
 }
 
 async fn scan_once(
-    docker:  &bollard::Docker,
-    llm:     &AnalysisClient,
-    store:   &mut SreStore,
-    state:   &Arc<RwLock<SreState>>,
-    tx:      &broadcast::Sender<Finding>,
-    cfg:     &SreConfig,
+    docker: &bollard::Docker,
+    llm: &AnalysisClient,
+    store: &mut SreStore,
+    state: &Arc<RwLock<SreState>>,
+    tx: &broadcast::Sender<Finding>,
+    cfg: &SreConfig,
 ) {
     let containers = match docker::list_containers(docker).await {
-        Ok(v)  => v,
-        Err(e) => { error!("docker list_containers error: {e}"); return; }
+        Ok(v) => v,
+        Err(e) => {
+            error!("docker list_containers error: {e}");
+            return;
+        }
     };
 
     // Update container statuses in shared state
     {
         let mut st = state.write().await;
-        st.containers = containers.iter().map(|c| ContainerStatus {
-            name:            c.name.clone(),
-            id:              c.id.clone(),
-            running:         c.running,
-            started_at:      c.started_at,
-            health:          c.health.clone(),
-            last_checked_at: Utc::now(),
-            last_severity:   None,
-        }).collect();
+        st.containers = containers
+            .iter()
+            .map(|c| ContainerStatus {
+                name: c.name.clone(),
+                id: c.id.clone(),
+                running: c.running,
+                started_at: c.started_at,
+                health: c.health.clone(),
+                last_checked_at: Utc::now(),
+                last_severity: None,
+            })
+            .collect();
         st.last_scan_at = Some(Utc::now());
     }
 
@@ -129,17 +135,20 @@ async fn scan_once(
 }
 
 async fn analyze_container(
-    c:      &ContainerInfo,
+    c: &ContainerInfo,
     docker: &bollard::Docker,
-    llm:    &AnalysisClient,
-    store:  &mut SreStore,
-    state:  &Arc<RwLock<SreState>>,
-    tx:     &broadcast::Sender<Finding>,
-    cfg:    &SreConfig,
+    llm: &AnalysisClient,
+    store: &mut SreStore,
+    state: &Arc<RwLock<SreState>>,
+    tx: &broadcast::Sender<Finding>,
+    cfg: &SreConfig,
 ) {
     let logs = match docker::tail_logs(docker, &c.name, cfg.log_tail_lines).await {
-        Ok(l)  => l,
-        Err(e) => { warn!("tail_logs {}: {e}", c.name); return; }
+        Ok(l) => l,
+        Err(e) => {
+            warn!("tail_logs {}: {e}", c.name);
+            return;
+        }
     };
 
     let hash = sha256_hex(&logs);
@@ -160,14 +169,14 @@ async fn analyze_container(
     finding.observed_at = Some(Utc::now());
 
     let obs = SreObservation {
-        observed_at:     Utc::now(),
-        container_name:  c.name.clone(),
-        severity:        finding.severity.clone(),
-        category:        finding.category.clone(),
-        finding:         finding.finding.clone(),
-        proposed_fix:    finding.proposed_fix.clone(),
+        observed_at: Utc::now(),
+        container_name: c.name.clone(),
+        severity: finding.severity.clone(),
+        category: finding.category.clone(),
+        finding: finding.finding.clone(),
+        proposed_fix: finding.proposed_fix.clone(),
         log_window_hash: hash,
-        log_snippet:     snippet,
+        log_snippet: snippet,
     };
 
     if let Err(e) = store.write(&obs).await {
@@ -188,10 +197,10 @@ async fn analyze_container(
 
 async fn analysis_loop(
     docker: bollard::Docker,
-    llm:    AnalysisClient,
-    state:  Arc<RwLock<SreState>>,
-    tx:     broadcast::Sender<Finding>,
-    cfg:    Arc<SreConfig>,
+    llm: AnalysisClient,
+    state: Arc<RwLock<SreState>>,
+    tx: broadcast::Sender<Finding>,
+    cfg: Arc<SreConfig>,
 ) {
     let ch = ch_client(&cfg);
     let mut store = SreStore::new(&ch);
@@ -226,9 +235,9 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     // Spawn analysis loop
     let loop_handle = {
         let docker = docker.clone();
-        let state  = state.clone();
-        let tx     = tx.clone();
-        let cfg    = cfg.clone();
+        let state = state.clone();
+        let tx = tx.clone();
+        let cfg = cfg.clone();
         tokio::spawn(async move {
             analysis_loop(docker, llm, state, tx, cfg).await;
         })
@@ -237,8 +246,8 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     // Spawn dashboard
     let dash_handle = {
         let state = state.clone();
-        let tx    = tx.clone();
-        let port  = cfg.dashboard_port;
+        let tx = tx.clone();
+        let port = cfg.dashboard_port;
         tokio::spawn(async move {
             dashboard::serve(state, tx, port).await;
         })

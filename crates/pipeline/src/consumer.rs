@@ -113,7 +113,11 @@ pub async fn run(
                         .add_partition_offset(&topic, partition, Offset::Offset(offset + 1))
                         .expect("add_partition_offset");
                     let cgm = consumer.group_metadata().expect("group_metadata");
-                    producer.send_offsets_to_transaction(&offsets, &cgm, Duration::from_secs(10))?;
+                    producer.send_offsets_to_transaction(
+                        &offsets,
+                        &cgm,
+                        Duration::from_secs(10),
+                    )?;
                     producer.commit_transaction(Duration::from_secs(10))?;
                     continue;
                 }

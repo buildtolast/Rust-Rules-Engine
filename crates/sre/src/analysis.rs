@@ -11,22 +11,22 @@ pub enum AnalysisError {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Finding {
-    pub severity:       String,
-    pub category:       String,
-    pub finding:        String,
-    pub proposed_fix:   String,
+    pub severity: String,
+    pub category: String,
+    pub finding: String,
+    pub proposed_fix: String,
     /// Populated after LLM response — not parsed from LLM JSON.
     #[serde(default)]
     pub container_name: String,
     #[serde(default)]
-    pub observed_at:    Option<chrono::DateTime<chrono::Utc>>,
+    pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub struct AnalysisClient {
     base_url: String,
-    model:    String,
-    api_key:  Option<String>,
-    http:     reqwest::Client,
+    model: String,
+    api_key: Option<String>,
+    http: reqwest::Client,
 }
 
 impl AnalysisClient {
@@ -39,7 +39,12 @@ impl AnalysisClient {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("failed to build reqwest client");
-        Self { base_url: base_url.into(), model: model.into(), api_key, http }
+        Self {
+            base_url: base_url.into(),
+            model: model.into(),
+            api_key,
+            http,
+        }
     }
 
     pub async fn analyze(

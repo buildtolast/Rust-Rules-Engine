@@ -12,14 +12,14 @@ pub enum SreStoreError {
 #[derive(clickhouse::Row, Serialize, Deserialize, Debug, Clone)]
 pub struct SreObservation {
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
-    pub observed_at:     DateTime<Utc>,
-    pub container_name:  String,
-    pub severity:        String,
-    pub category:        String,
-    pub finding:         String,
-    pub proposed_fix:    String,
+    pub observed_at: DateTime<Utc>,
+    pub container_name: String,
+    pub severity: String,
+    pub category: String,
+    pub finding: String,
+    pub proposed_fix: String,
     pub log_window_hash: String,
-    pub log_snippet:     String,
+    pub log_snippet: String,
 }
 
 pub struct SreStore {
@@ -28,11 +28,16 @@ pub struct SreStore {
 
 impl SreStore {
     pub fn new(client: &Client) -> Self {
-        Self { client: client.clone() }
+        Self {
+            client: client.clone(),
+        }
     }
 
     pub async fn write(&mut self, obs: &SreObservation) -> Result<(), SreStoreError> {
-        let mut insert = self.client.insert::<SreObservation>("sre_observations").await?;
+        let mut insert = self
+            .client
+            .insert::<SreObservation>("sre_observations")
+            .await?;
         insert.write(obs).await?;
         insert.end().await?;
         Ok(())

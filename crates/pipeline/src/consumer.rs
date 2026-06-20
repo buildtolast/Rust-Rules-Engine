@@ -50,18 +50,18 @@ pub enum PipelineError {
 
 /// Owned copy of a Kafka message — safe to hand to rayon across thread boundaries.
 struct OwnedMsg {
-    topic:     String,
+    topic: String,
     partition: i32,
-    offset:    i64,
-    ts_ms:     i64,
-    raw:       String,
+    offset: i64,
+    ts_ms: i64,
+    raw: String,
 }
 
 /// Output of the parallel eval phase for one message.
 struct MsgEval {
-    topic:        String,
-    partition:    i32,
-    offset:       i64,
+    topic: String,
+    partition: i32,
+    offset: i64,
     /// One entry per rule; None if the message failed to parse.
     rule_results: Option<Vec<(bool, rules_core::AuditRecord)>>,
 }
@@ -131,7 +131,9 @@ pub async fn run(
 
             while batch.len() < BATCH_SIZE {
                 let remaining = deadline.saturating_duration_since(Instant::now());
-                if remaining.is_zero() { break; }
+                if remaining.is_zero() {
+                    break;
+                }
 
                 match consumer.poll(remaining.min(Duration::from_millis(10))) {
                     Some(Ok(m)) => {
@@ -141,15 +143,17 @@ pub async fn run(
                             .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
                         match m.payload_view::<str>() {
                             Some(Ok(s)) => batch.push(OwnedMsg {
-                                topic:     m.topic().to_string(),
+                                topic: m.topic().to_string(),
                                 partition: m.partition(),
-                                offset:    m.offset(),
+                                offset: m.offset(),
                                 ts_ms,
-                                raw:       s.to_string(),
+                                raw: s.to_string(),
                             }),
                             _ => tracing::warn!(
-                                topic = m.topic(), partition = m.partition(),
-                                offset = m.offset(), "non-UTF-8 payload, skipping"
+                                topic = m.topic(),
+                                partition = m.partition(),
+                                offset = m.offset(),
+                                "non-UTF-8 payload, skipping"
                             ),
                         }
                     }
@@ -158,7 +162,9 @@ pub async fn run(
                 }
             }
 
-            if batch.is_empty() { continue; }
+            if batch.is_empty() {
+                continue;
+            }
 
             // ── Phase 1: parallel parse + eval (rayon) ────────────────────
             let rules: Arc<Vec<eval::CompiledRule>> = cache.get();
@@ -170,7 +176,11 @@ pub async fn run(
                 .map(|msg| {
                     let parse_start = Instant::now();
                     let event = match rules_core::SourceEvent::from_kafka(
-                        &msg.topic, msg.partition, msg.offset, msg.ts_ms, &msg.raw,
+                        &msg.topic,
+                        msg.partition,
+                        msg.offset,
+                        msg.ts_ms,
+                        &msg.raw,
                     ) {
                         Ok(e) => e,
                         Err(e) => {
@@ -194,25 +204,32 @@ pub async fn run(
                             let outcome = eval::evaluate(compiled, &event);
                             let matched =
                                 outcome.result.audit_type == rules_core::AuditType::Matched;
-                            let routed = if matched { Some(event.raw.clone()) } else { None };
+                            let routed = if matched {
+                                Some(event.raw.clone())
+                            } else {
+                                None
+                            };
                             let eval_ns = outcome.eval_time_nano;
                             let audit = rules_core::AuditRecord {
                                 audit_id: rules_core::audit_id(
-                                    &msg.topic, msg.partition, msg.offset, &compiled.id,
+                                    &msg.topic,
+                                    msg.partition,
+                                    msg.offset,
+                                    &compiled.id,
                                 ),
-                                rule_id:         compiled.id.clone(),
+                                rule_id: compiled.id.clone(),
                                 schema_version,
-                                audit_type:      outcome.result.audit_type,
-                                reason:          outcome.result.reason,
-                                source_event:    event.raw.clone(),
-                                routed_event:    routed,
-                                source_topic:    msg.topic.clone(),
-                                partition:       msg.partition,
-                                offset:          msg.offset,
-                                timestamp:       chrono::DateTime::from_timestamp_millis(msg.ts_ms)
-                                                     .unwrap_or_else(chrono::Utc::now),
+                                audit_type: outcome.result.audit_type,
+                                reason: outcome.result.reason,
+                                source_event: event.raw.clone(),
+                                routed_event: routed,
+                                source_topic: msg.topic.clone(),
+                                partition: msg.partition,
+                                offset: msg.offset,
+                                timestamp: chrono::DateTime::from_timestamp_millis(msg.ts_ms)
+                                    .unwrap_or_else(chrono::Utc::now),
                                 parse_time_nano: parse_ns,
-                                eval_time_nano:  eval_ns,
+                                eval_time_nano: eval_ns,
                                 total_time_nano: parse_ns + eval_ns,
                             };
                             (matched, audit)
@@ -220,9 +237,9 @@ pub async fn run(
                         .collect();
 
                     MsgEval {
-                        topic:        msg.topic.clone(),
-                        partition:    msg.partition,
-                        offset:       msg.offset,
+                        topic: msg.topic.clone(),
+                        partition: msg.partition,
+                        offset: msg.offset,
                         rule_results: Some(rule_results),
                     }
                 })
@@ -275,18 +292,21 @@ pub async fn run(
             }
 
             // Compute total consumer lag across all assigned partitions.
-            let lag: i64 = last_offsets.iter().map(|((topic, partition), committed)| {
-                consumer
-                    .fetch_watermarks(topic, *partition, Duration::from_millis(200))
-                    .map(|(_low, high)| (high - committed).max(0))
-                    .unwrap_or(0)
-            }).sum();
+            let lag: i64 = last_offsets
+                .iter()
+                .map(|((topic, partition), committed)| {
+                    consumer
+                        .fetch_watermarks(topic, *partition, Duration::from_millis(200))
+                        .map(|(_low, high)| (high - committed).max(0))
+                        .unwrap_or(0)
+                })
+                .sum();
 
             counters.record_batch(batch.len() as u64, eval_ms as u64, txn_ms as u64, lag);
 
             tracing::debug!(
-                messages  = batch.len(),
-                audits    = audit_count,
+                messages = batch.len(),
+                audits = audit_count,
                 eval_ms,
                 txn_ms,
                 lag,

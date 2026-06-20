@@ -145,12 +145,10 @@ fn default_export_limit() -> u64 {
     1_000_000
 }
 
-const CSV_HEADER_META: &str =
-    "audit_id,rule_id,audit_type,reason,source_topic,partition,offset,\
+const CSV_HEADER_META: &str = "audit_id,rule_id,audit_type,reason,source_topic,partition,offset,\
      timestamp,parse_time_nano,eval_time_nano,total_time_nano\n";
 
-const CSV_HEADER_FULL: &str =
-    "audit_id,rule_id,audit_type,reason,source_topic,partition,offset,\
+const CSV_HEADER_FULL: &str = "audit_id,rule_id,audit_type,reason,source_topic,partition,offset,\
      timestamp,parse_time_nano,eval_time_nano,total_time_nano,source_event,routed_event\n";
 
 pub async fn export(
@@ -231,16 +229,27 @@ pub async fn export(
                         .to_rfc3339();
                     let line = format!(
                         "{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
-                        row.audit_id, row.rule_id, row.audit_type,
-                        csv_escape(&row.reason), row.source_topic,
-                        row.partition, row.offset, ts,
-                        row.parse_time_nano, row.eval_time_nano, row.total_time_nano,
-                        csv_escape(&row.source_event), csv_escape(&row.routed_event),
+                        row.audit_id,
+                        row.rule_id,
+                        row.audit_type,
+                        csv_escape(&row.reason),
+                        row.source_topic,
+                        row.partition,
+                        row.offset,
+                        ts,
+                        row.parse_time_nano,
+                        row.eval_time_nano,
+                        row.total_time_nano,
+                        csv_escape(&row.source_event),
+                        csv_escape(&row.routed_event),
                     );
                     Some((Ok::<Bytes, std::io::Error>(Bytes::from(line)), cursor))
                 }
                 Ok(None) => None,
-                Err(e) => { tracing::error!("export stream error: {e}"); None }
+                Err(e) => {
+                    tracing::error!("export stream error: {e}");
+                    None
+                }
             }
         });
         Body::from_stream(header.chain(rows))
@@ -261,15 +270,25 @@ pub async fn export(
                         .to_rfc3339();
                     let line = format!(
                         "{},{},{},{},{},{},{},{},{},{},{}\n",
-                        row.audit_id, row.rule_id, row.audit_type,
-                        csv_escape(&row.reason), row.source_topic,
-                        row.partition, row.offset, ts,
-                        row.parse_time_nano, row.eval_time_nano, row.total_time_nano,
+                        row.audit_id,
+                        row.rule_id,
+                        row.audit_type,
+                        csv_escape(&row.reason),
+                        row.source_topic,
+                        row.partition,
+                        row.offset,
+                        ts,
+                        row.parse_time_nano,
+                        row.eval_time_nano,
+                        row.total_time_nano,
                     );
                     Some((Ok::<Bytes, std::io::Error>(Bytes::from(line)), cursor))
                 }
                 Ok(None) => None,
-                Err(e) => { tracing::error!("export stream error: {e}"); None }
+                Err(e) => {
+                    tracing::error!("export stream error: {e}");
+                    None
+                }
             }
         });
         Body::from_stream(header.chain(rows))

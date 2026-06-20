@@ -1,7 +1,9 @@
 //! store-clickhouse — batched audit writer, migrations (S3), analytics queries (S4)
 
 pub mod analytics;
-pub use analytics::{query_analytics, query_top_audits, AnalyticsStats, AuditQueryRow, RuleStat, TimeSeriesPoint};
+pub use analytics::{
+    query_analytics, query_top_audits, AnalyticsStats, AuditQueryRow, RuleStat, TimeSeriesPoint,
+};
 pub use clickhouse;
 pub use clickhouse::Client as ClickHouseClient;
 
@@ -50,13 +52,18 @@ pub fn client(cfg: &ClickHouseConfig) -> Client {
 
 pub async fn ping(client: &Client) -> bool {
     #[derive(clickhouse::Row, serde::Deserialize)]
-    struct One { #[serde(rename = "1")] _v: u8 }
+    struct One {
+        #[serde(rename = "1")]
+        _v: u8,
+    }
     client.query("SELECT 1").fetch_one::<One>().await.is_ok()
 }
 
 pub const MIGRATION_AUDITS: &str = include_str!("../../../migrations/clickhouse/0001_audits.sql");
-pub const MIGRATION_SRE: &str = include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
-pub const MIGRATION_ANALYTICS: &str = include_str!("../../../migrations/clickhouse/0003_analytics.sql");
+pub const MIGRATION_SRE: &str =
+    include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
+pub const MIGRATION_ANALYTICS: &str =
+    include_str!("../../../migrations/clickhouse/0003_analytics.sql");
 
 pub async fn run_migrations(client: &Client) -> Result<(), Error> {
     client.query(MIGRATION_AUDITS).execute().await?;
@@ -119,16 +126,16 @@ impl AuditRow {
 }
 
 pub struct AuditWriter {
-    client:    Client,
-    buffer:    Vec<AuditRow>,
+    client: Client,
+    buffer: Vec<AuditRow>,
     batch_max: usize,
 }
 
 impl AuditWriter {
     pub fn new(client: &Client, cfg: &ClickHouseConfig) -> Self {
         Self {
-            client:    client.clone(),
-            buffer:    Vec::with_capacity(cfg.batch_max_rows as usize),
+            client: client.clone(),
+            buffer: Vec::with_capacity(cfg.batch_max_rows as usize),
             batch_max: cfg.batch_max_rows as usize,
         }
     }
@@ -145,7 +152,9 @@ impl AuditWriter {
     }
 
     pub async fn flush(&mut self) -> Result<(), Error> {
-        if self.buffer.is_empty() { return Ok(()); }
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
         let mut insert = self.client.insert::<AuditRow>("audits").await?;
         for row in &self.buffer {
             insert.write(row).await?;

@@ -17,8 +17,8 @@ use tokio_stream::wrappers::BroadcastStream;
 #[derive(Clone)]
 struct AppState {
     state: Arc<RwLock<SreState>>,
-    tx:    broadcast::Sender<Finding>,
-    ch:    Client,
+    tx: broadcast::Sender<Finding>,
+    ch: Client,
 }
 
 async fn index(State(app): State<AppState>) -> Html<&'static str> {
@@ -198,12 +198,12 @@ async fn findings(State(app): State<AppState>) -> Json<Vec<Finding>> {
         Ok(rows) => Json(
             rows.into_iter()
                 .map(|obs| Finding {
-                    severity:       obs.severity,
-                    category:       obs.category,
-                    finding:        obs.finding,
-                    proposed_fix:   obs.proposed_fix,
+                    severity: obs.severity,
+                    category: obs.category,
+                    finding: obs.finding,
+                    proposed_fix: obs.proposed_fix,
                     container_name: obs.container_name,
-                    observed_at:    Some(obs.observed_at),
+                    observed_at: Some(obs.observed_at),
                 })
                 .collect(),
         ),
@@ -217,7 +217,7 @@ async fn findings(State(app): State<AppState>) -> Json<Vec<Finding>> {
 async fn findings_sse(
     State(app): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx     = app.tx.subscribe();
+    let rx = app.tx.subscribe();
     let stream = BroadcastStream::new(rx)
         .filter_map(|r| async move { r.ok() })
         .map(|f| {
@@ -238,9 +238,9 @@ async fn health_check() -> Json<serde_json::Value> {
 
 pub async fn serve(
     state: Arc<RwLock<SreState>>,
-    tx:    broadcast::Sender<Finding>,
-    ch:    Client,
-    port:  u16,
+    tx: broadcast::Sender<Finding>,
+    ch: Client,
+    port: u16,
 ) {
     let app_state = AppState { state, tx, ch };
 
@@ -257,5 +257,7 @@ pub async fn serve(
         .expect("failed to bind dashboard port");
 
     tracing::info!("SRE dashboard listening on http://0.0.0.0:{port}");
-    axum::serve(listener, router).await.expect("dashboard server error");
+    axum::serve(listener, router)
+        .await
+        .expect("dashboard server error");
 }

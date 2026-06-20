@@ -30,13 +30,13 @@ use tower_http::cors::{Any, CorsLayer};
 /// Shared application state injected into every handler via axum's `State` extractor.
 #[derive(Clone)]
 pub struct AppState {
-    pub rules:       store_postgres::RuleRepository,
-    pub ch_client:   store_clickhouse::ClickHouseClient,
-    pub producer:    Arc<FutureProducer>,
+    pub rules: store_postgres::RuleRepository,
+    pub ch_client: store_clickhouse::ClickHouseClient,
+    pub producer: Arc<FutureProducer>,
     pub source_topic: String,
     pub kafka_brokers: String,
-    pub counters:    Arc<pipeline::PipelineCounters>,
-    pub rule_cache:  pipeline::RuleCache,
+    pub counters: Arc<pipeline::PipelineCounters>,
+    pub rule_cache: pipeline::RuleCache,
 }
 
 /// Build the axum router with CORS enabled. Attach `AppState` before serving.
@@ -47,20 +47,23 @@ pub fn router(state: AppState) -> Router {
         .allow_headers(Any);
 
     Router::new()
-        .route("/health",       get(routes::health::health))
+        .route("/health", get(routes::health::health))
         .route("/health/ready", get(routes::health::ready))
-        .route("/api/rules",    get(routes::rules::list).post(routes::rules::create))
+        .route(
+            "/api/rules",
+            get(routes::rules::list).post(routes::rules::create),
+        )
         .route(
             "/api/rules/:id",
             get(routes::rules::get_one)
                 .put(routes::rules::update)
                 .delete(routes::rules::delete_one),
         )
-        .route("/api/config",          get(routes::config::get_config))
+        .route("/api/config", get(routes::config::get_config))
         .route("/api/analytics/stats", get(routes::analytics::stats))
-        .route("/api/reports/top",     get(routes::reports::top))
-        .route("/api/reports/export",  get(routes::reports::export))
-        .route("/api/metrics",         get(routes::metrics::metrics))
+        .route("/api/reports/top", get(routes::reports::top))
+        .route("/api/reports/export", get(routes::reports::export))
+        .route("/api/metrics", get(routes::metrics::metrics))
         .route("/api/simulation/push", post(routes::simulation::push))
         .layer(cors)
         .with_state(state)

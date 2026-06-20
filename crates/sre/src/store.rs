@@ -12,14 +12,14 @@ pub enum SreStoreError {
 #[derive(clickhouse::Row, Serialize, Deserialize, Debug, Clone)]
 pub struct SreObservation {
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
-    pub observed_at:     DateTime<Utc>,
-    pub container_name:  String,
-    pub severity:        String,
-    pub category:        String,
-    pub finding:         String,
-    pub proposed_fix:    String,
+    pub observed_at: DateTime<Utc>,
+    pub container_name: String,
+    pub severity: String,
+    pub category: String,
+    pub finding: String,
+    pub proposed_fix: String,
     pub log_window_hash: String,
-    pub log_snippet:     String,
+    pub log_snippet: String,
 }
 
 /// After this many consecutive "nothing unusual" findings, suppress LLM calls
@@ -27,23 +27,26 @@ pub struct SreObservation {
 const QUIET_SUPPRESS_AFTER: u32 = 3;
 
 pub struct SreStore {
-    client:        Client,
-    last_hashes:   std::collections::HashMap<String, String>,
+    client: Client,
+    last_hashes: std::collections::HashMap<String, String>,
     quiet_streaks: std::collections::HashMap<String, u32>,
 }
 
 impl SreStore {
     pub fn new(client: &Client) -> Self {
         Self {
-            client:        client.clone(),
-            last_hashes:   Default::default(),
+            client: client.clone(),
+            last_hashes: Default::default(),
             quiet_streaks: Default::default(),
         }
     }
 
     /// True if the filtered log window is identical to the previous scan.
     pub fn is_unchanged(&self, container: &str, hash: &str) -> bool {
-        self.last_hashes.get(container).map(|h| h == hash).unwrap_or(false)
+        self.last_hashes
+            .get(container)
+            .map(|h| h == hash)
+            .unwrap_or(false)
     }
 
     /// True if the LLM has confirmed "nothing unusual" enough times that we
@@ -53,7 +56,8 @@ impl SreStore {
     }
 
     pub fn record_hash(&mut self, container: &str, hash: &str) {
-        self.last_hashes.insert(container.to_string(), hash.to_string());
+        self.last_hashes
+            .insert(container.to_string(), hash.to_string());
     }
 
     /// Call after each LLM result. Increments quiet streak for INFO/normal,
@@ -75,7 +79,10 @@ impl SreStore {
 
     /// Returns the most recent findings, deduplicated by (container, hash) so
     /// two replicas scanning the same container don't produce double entries.
-    pub async fn read_recent(client: &Client, limit: u64) -> Result<Vec<SreObservation>, SreStoreError> {
+    pub async fn read_recent(
+        client: &Client,
+        limit: u64,
+    ) -> Result<Vec<SreObservation>, SreStoreError> {
         let rows = client
             .query(
                 "SELECT
@@ -99,7 +106,10 @@ impl SreStore {
     }
 
     pub async fn write(&mut self, obs: &SreObservation) -> Result<(), SreStoreError> {
-        let mut insert = self.client.insert::<SreObservation>("sre_observations").await?;
+        let mut insert = self
+            .client
+            .insert::<SreObservation>("sre_observations")
+            .await?;
         insert.write(obs).await?;
         insert.end().await?;
         Ok(())

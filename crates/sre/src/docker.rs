@@ -21,18 +21,18 @@ pub enum HealthSummary {
 
 #[derive(Debug, Clone)]
 pub struct ContainerInfo {
-    pub name:       String,
-    pub id:         String,
-    pub running:    bool,
+    pub name: String,
+    pub id: String,
+    pub running: bool,
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub health:     HealthSummary,
+    pub health: HealthSummary,
 }
 
 fn health_from(h: Option<Health>) -> HealthSummary {
     match h.and_then(|h| h.status) {
-        Some(HealthStatusEnum::HEALTHY)   => HealthSummary::Healthy,
+        Some(HealthStatusEnum::HEALTHY) => HealthSummary::Healthy,
         Some(HealthStatusEnum::UNHEALTHY) => HealthSummary::Unhealthy,
-        _                                 => HealthSummary::None,
+        _ => HealthSummary::None,
     }
 }
 
@@ -66,7 +66,13 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
         });
         let health = health_from(state.health);
 
-        result.push(ContainerInfo { name, id, running, started_at, health });
+        result.push(ContainerInfo {
+            name,
+            id,
+            running,
+            started_at,
+            health,
+        });
     }
     Ok(result)
 }

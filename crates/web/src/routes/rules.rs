@@ -40,11 +40,7 @@ pub async fn get_one(
     State(s): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<rules_core::Rule>, ApiError> {
-    s.rules
-        .get(&id)
-        .await?
-        .map(Json)
-        .ok_or(ApiError::NotFound)
+    s.rules.get(&id).await?.map(Json).ok_or(ApiError::NotFound)
 }
 
 pub async fn create(

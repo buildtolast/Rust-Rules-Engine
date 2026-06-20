@@ -109,12 +109,12 @@ fn generate_event(i: usize) -> serde_json::Value {
 
 /// Matches: "any region premium >120k" and many regional premium rules.
 fn gen_premium_large(i: usize) -> serde_json::Value {
-    const REGIONS:  &[&str] = &["US", "APAC", "EU", "LATAM", "MEA"];
-    const SOURCES:  &[&str] = &["web", "mobile", "partner"];
+    const REGIONS: &[&str] = &["US", "APAC", "EU", "LATAM", "MEA"];
+    const SOURCES: &[&str] = &["web", "mobile", "partner"];
     let region = REGIONS[(i / 4) % REGIONS.len()];
     let source = SOURCES[(i / 4) % SOURCES.len()];
-    let amount  = 130_000.0 + (i as f64 % 70.0) * 1_000.0;
-    let tax     = 0.10 + (i as f64 % 15.0) * 0.01;
+    let amount = 130_000.0 + (i as f64 % 70.0) * 1_000.0;
+    let tax = 0.10 + (i as f64 % 15.0) * 0.01;
 
     serde_json::json!({
         "id":        uuid::Uuid::new_v4().to_string(),
@@ -136,8 +136,8 @@ fn gen_premium_large(i: usize) -> serde_json::Value {
 fn gen_gold_api_urgent(i: usize) -> serde_json::Value {
     const REGIONS: &[&str] = &["US", "APAC", "EU", "LATAM", "MEA"];
     let region = REGIONS[(i / 4) % REGIONS.len()];
-    let amount  = 55_000.0 + (i as f64 % 50.0) * 1_000.0;
-    let tax     = 0.08 + (i as f64 % 12.0) * 0.01;
+    let amount = 55_000.0 + (i as f64 % 50.0) * 1_000.0;
+    let tax = 0.08 + (i as f64 % 12.0) * 0.01;
 
     serde_json::json!({
         "id":        uuid::Uuid::new_v4().to_string(),
@@ -159,11 +159,11 @@ fn gen_gold_api_urgent(i: usize) -> serde_json::Value {
 fn gen_regional(i: usize) -> serde_json::Value {
     // (region, source, tier, base_amount, priority, tax_rate, item_price)
     const ARCHETYPES: &[(&str, &str, &str, f64, u64, f64, f64)] = &[
-        ("US",    "web",     "standard", 44_000.0, 2, 0.09, 1_000.0), // US web standard
-        ("EU",    "web",     "premium",  55_000.0, 1, 0.21, 3_000.0), // EU web premium VAT
-        ("APAC",  "mobile",  "gold",     40_000.0, 2, 0.16, 2_000.0), // APAC gold mobile
-        ("LATAM", "partner", "premium",  22_000.0, 3, 0.05, 800.0),   // LATAM premium partner
-        ("MEA",   "web",     "gold",     65_000.0, 1, 0.00, 1_500.0), // MEA web gold zero-tax
+        ("US", "web", "standard", 44_000.0, 2, 0.09, 1_000.0), // US web standard
+        ("EU", "web", "premium", 55_000.0, 1, 0.21, 3_000.0),  // EU web premium VAT
+        ("APAC", "mobile", "gold", 40_000.0, 2, 0.16, 2_000.0), // APAC gold mobile
+        ("LATAM", "partner", "premium", 22_000.0, 3, 0.05, 800.0), // LATAM premium partner
+        ("MEA", "web", "gold", 65_000.0, 1, 0.00, 1_500.0),    // MEA web gold zero-tax
     ];
     let (region, source, tier, base, priority, tax, item_price) =
         ARCHETYPES[(i / 4) % ARCHETYPES.len()];

@@ -15,6 +15,9 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/store-postgres/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/bin/sre-agent/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/sre/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/pipeline/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/sre/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/telemetry/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

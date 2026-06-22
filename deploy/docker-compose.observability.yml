@@ -14,11 +14,12 @@ services:
     ports:
       - "4317:4317"
       - "4318:4318"
+      - "24224:24224"
     depends_on:
       - signoz-otelcollector
 
   signoz-clickhouse:
-    image: clickhouse/clickhouse-server:24.1.2-alpine
+    image: clickhouse/clickhouse-server:latest
     container_name: rre-signoz-clickhouse
     environment:
       CLICKHOUSE_DB: signoz_metrics
@@ -26,6 +27,8 @@ services:
       CLICKHOUSE_PASSWORD: ${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}
     volumes:
       - rre-signoz-ch-data:/var/lib/clickhouse
+      - ./signoz-clickhouse-config.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./signoz-clickhouse-users.xml:/etc/clickhouse-server/users.d/allow_json.xml:ro
     deploy:
       resources:
         limits:
@@ -38,24 +41,15 @@ services:
       timeout: 5s
       retries: 10
 
-  signoz-schema-init:
-    image: clickhouse/clickhouse-server:24.1.2-alpine
+  signoz-schema-migrator:
+    image: signoz/signoz-schema-migrator:latest
     container_name: rre-signoz-schema-init
+    command:
+      - "sync"
+      - "--dsn=tcp://admin:${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}@signoz-clickhouse:9000"
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        clickhouse-client --host signoz-clickhouse \
-          --user admin \
-          --password "${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}" \
-          --query "CREATE DATABASE IF NOT EXISTS signoz_traces"
-        clickhouse-client --host signoz-clickhouse \
-          --user admin \
-          --password "${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}" \
-          --query "CREATE DATABASE IF NOT EXISTS signoz_logs"
-        echo "Schema init done"
 
   signoz-otelcollector:
     image: signoz/signoz-otel-collector:v0.144.5
@@ -65,7 +59,7 @@ services:
     volumes:
       - ./signoz-otelcollector-config.yaml:/etc/otel/config.yaml:ro
     depends_on:
-      signoz-schema-init:
+      signoz-schema-migrator:
         condition: service_completed_successfully
 
   signoz:
@@ -76,7 +70,7 @@ services:
       ClickHouseUrl: http://admin:${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}@signoz-clickhouse:8123
       SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
     ports:
-      - "${SIGNOZ_PORT:-3301}:3301"
+      - "${SIGNOZ_PORT:-3301}:8080"
     volumes:
       - rre-signoz-data:/var/lib/signoz
     depends_on:

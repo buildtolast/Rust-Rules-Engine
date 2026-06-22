@@ -36,7 +36,8 @@ tower = "0.4"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 uuid = { version = "1", features = ["v4"] }
 rayon = "1"
-opentelemetry          = { version = "0.27", features = ["trace"] }
-opentelemetry_sdk      = { version = "0.27", features = ["rt-tokio", "trace"] }
-opentelemetry-otlp     = { version = "0.27", features = ["tonic", "trace"] }
-tracing-opentelemetry  = "0.28"
+opentelemetry                 = { version = "0.27", features = ["trace", "logs"] }
+opentelemetry_sdk             = { version = "0.27", features = ["rt-tokio", "trace", "logs"] }
+opentelemetry-otlp            = { version = "0.27", features = ["tonic", "trace", "logs"] }
+opentelemetry-appender-tracing = { version = "0.27" }
+tracing-opentelemetry         = "0.28"

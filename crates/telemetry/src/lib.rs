@@ -1,7 +1,9 @@
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_otlp::{SpanExporter, WithExportConfig};
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
+use opentelemetry_otlp::{LogExporter, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
+    logs::LoggerProvider,
     propagation::TraceContextPropagator,
     resource::Resource,
     runtime,
@@ -10,16 +12,20 @@ use opentelemetry_sdk::{
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-/// Returned by `init` — shuts down the OTEL tracer provider on drop.
-#[must_use = "dropping ShutdownGuard immediately shuts down the OTEL exporter"]
+/// Returned by `init` — shuts down the OTEL providers on drop.
+#[must_use = "dropping ShutdownGuard immediately shuts down the OTEL exporters"]
 pub struct ShutdownGuard {
-    provider: opentelemetry_sdk::trace::TracerProvider,
+    tracer_provider: TracerProvider,
+    logger_provider: LoggerProvider,
 }
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        if let Err(e) = self.provider.shutdown() {
-            eprintln!("OTEL shutdown error: {e}");
+        if let Err(e) = self.tracer_provider.shutdown() {
+            eprintln!("OTEL tracer shutdown error: {e}");
+        }
+        if let Err(e) = self.logger_provider.shutdown() {
+            eprintln!("OTEL logger shutdown error: {e}");
         }
     }
 }
@@ -48,31 +54,40 @@ pub fn init(service_name: &str) -> ShutdownGuard {
         opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
     ]);
 
-    let exporter = SpanExporter::builder()
+    let span_exporter = SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint)
+        .with_endpoint(&endpoint)
         .build()
         .expect("OTLP span exporter build failed");
 
-    let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter, runtime::Tokio)
-        .with_resource(resource)
+    let tracer_provider = TracerProvider::builder()
+        .with_batch_exporter(span_exporter, runtime::Tokio)
+        .with_resource(resource.clone())
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             sample_rate,
         ))))
         .build();
 
-    // Get an SDK tracer (implements PreSampledTracer, required by OpenTelemetryLayer).
-    let tracer = provider.tracer(service_name.to_string());
+    let tracer = tracer_provider.tracer(service_name.to_string());
+    global::set_tracer_provider(tracer_provider.clone());
 
-    // Register as global provider so application code can use `global::tracer(...)`.
-    global::set_tracer_provider(provider.clone());
+    let log_exporter = LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(&endpoint)
+        .build()
+        .expect("OTLP log exporter build failed");
+
+    let logger_provider = LoggerProvider::builder()
+        .with_batch_exporter(log_exporter, runtime::Tokio)
+        .with_resource(resource)
+        .build();
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .with(OpenTelemetryLayer::new(tracer))
+        .with(OpenTelemetryTracingBridge::new(&logger_provider))
         .init();
 
-    ShutdownGuard { provider }
+    ShutdownGuard { tracer_provider, logger_provider }
 }

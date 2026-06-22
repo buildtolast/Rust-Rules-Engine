@@ -71,17 +71,14 @@ impl AnalysisClient {
             container, log_window
         );
 
-        // Assistant prefill with "{" forces the model to complete a JSON object
-        // rather than reasoning in prose (works with most OpenAI-compatible endpoints).
         let body = serde_json::json!({
             "model": self.model,
             "messages": [
-                { "role": "system",    "content": system_prompt },
-                { "role": "user",      "content": user_content  },
-                { "role": "assistant", "content": "{"            }
+                { "role": "system", "content": system_prompt },
+                { "role": "user",   "content": user_content  }
             ],
             "temperature": 0.1,
-            "max_tokens":  300
+            "max_tokens":  1500
         });
 
         // Retry once on connection errors (server closed idle keep-alive between calls).
@@ -108,6 +105,13 @@ impl AnalysisClient {
                     Err(e) => {
                         last_err = Some(e);
                     }
+                    Ok(r) if !r.status().is_success() => {
+                        let status = r.status();
+                        let body = r.text().await.unwrap_or_default();
+                        return Err(AnalysisError::Unavailable(
+                            format!("HTTP {status}: {body}")
+                        ));
+                    }
                     Ok(r) => {
                         result = Some(r);
                         break;
@@ -115,9 +119,7 @@ impl AnalysisClient {
                 }
             }
             match result {
-                Some(r) => r
-                    .error_for_status()
-                    .map_err(|e| AnalysisError::Unavailable(e.to_string()))?,
+                Some(r) => r,
                 None => return Err(AnalysisError::Unavailable(last_err.unwrap().to_string())),
             }
         };
@@ -131,9 +133,7 @@ impl AnalysisClient {
             .as_str()
             .ok_or_else(|| AnalysisError::ParseError("missing content field".into()))?;
 
-        // The assistant prefill "{" is not included in the response content — prepend it.
-        let full = format!("{{{content}");
-        extract_json(&full)
+        extract_json(content)
     }
 
     /// Send a raw prompt and return the raw LLM text response.
@@ -243,8 +243,18 @@ fn quote_bare_keys(s: &str) -> String {
 }
 
 /// Extract the first complete `{...}` JSON object from a string.
-/// The LLM often wraps JSON in prose or markdown — this strips the wrapper.
+/// Strips `<think>…</think>` reasoning blocks (emitted by GLM and similar
+/// models) before searching, so the reasoning draft never shadows the answer.
 fn extract_json(content: &str) -> Result<Finding, AnalysisError> {
+    // Remove <think>...</think> if present; the final answer follows it.
+    let buf;
+    let content = if let (Some(s), Some(e)) = (content.find("<think>"), content.find("</think>")) {
+        buf = format!("{}{}", &content[..s], &content[e + "</think>".len()..]);
+        buf.as_str()
+    } else {
+        content
+    };
+
     let start = content
         .find('{')
         .ok_or_else(|| AnalysisError::ParseError("no JSON object in LLM response".into()))?;

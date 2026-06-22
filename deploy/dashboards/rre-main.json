@@ -7,21 +7,45 @@
     "variables": {},
     "panelMap": {},
     "layout": [
-      { "h": 2, "i": "stat-total-spans",   "w": 3, "x": 0,  "y": 0  },
-      { "h": 2, "i": "stat-error-rate",    "w": 3, "x": 3,  "y": 0  },
-      { "h": 2, "i": "stat-p99-latency",   "w": 3, "x": 6,  "y": 0  },
-      { "h": 2, "i": "stat-avg-latency",   "w": 3, "x": 9,  "y": 0  },
-      { "h": 4, "i": "graph-request-rate", "w": 6, "x": 0,  "y": 2  },
-      { "h": 4, "i": "graph-latency-pct",  "w": 6, "x": 6,  "y": 2  },
-      { "h": 4, "i": "graph-error-rate",   "w": 6, "x": 0,  "y": 6  },
-      { "h": 4, "i": "graph-ch-ops",       "w": 6, "x": 6,  "y": 6  },
-      { "h": 4, "i": "graph-http-resp",    "w": 6, "x": 0,  "y": 10 },
-      { "h": 4, "i": "graph-sre-activity", "w": 6, "x": 6,  "y": 10 },
-      { "h": 4, "i": "table-top-ops",      "w": 12, "x": 0, "y": 14 },
-      { "h": 4, "i": "graph-span-kinds",   "w": 6, "x": 0,  "y": 18 },
-      { "h": 4, "i": "graph-throughput",   "w": 6, "x": 6,  "y": 18 }
+      { "h": 3, "i": "text-init-services",  "w": 12, "x": 0, "y": 0  },
+      { "h": 2, "i": "stat-total-spans",    "w": 3,  "x": 0, "y": 3  },
+      { "h": 2, "i": "stat-error-rate",     "w": 3,  "x": 3, "y": 3  },
+      { "h": 2, "i": "stat-p99-latency",    "w": 3,  "x": 6, "y": 3  },
+      { "h": 2, "i": "stat-avg-latency",    "w": 3,  "x": 9, "y": 3  },
+      { "h": 4, "i": "graph-request-rate",  "w": 6,  "x": 0, "y": 5  },
+      { "h": 4, "i": "graph-latency-pct",   "w": 6,  "x": 6, "y": 5  },
+      { "h": 4, "i": "graph-error-rate",    "w": 6,  "x": 0, "y": 9  },
+      { "h": 4, "i": "graph-ch-ops",        "w": 6,  "x": 6, "y": 9  },
+      { "h": 4, "i": "graph-http-resp",     "w": 6,  "x": 0, "y": 13 },
+      { "h": 4, "i": "graph-sre-activity",  "w": 6,  "x": 6, "y": 13 },
+      { "h": 4, "i": "table-top-ops",       "w": 12, "x": 0, "y": 17 },
+      { "h": 4, "i": "graph-span-kinds",    "w": 6,  "x": 0, "y": 21 },
+      { "h": 4, "i": "graph-throughput",    "w": 6,  "x": 6, "y": 21 }
     ],
     "widgets": [
+
+      {
+        "id": "text-init-services",
+        "title": "One-time Init Services — Expected to be Stopped",
+        "description": "These containers run exactly once on first boot and exit with code 0. Their absence from the active services list is intentional — not an incident.",
+        "panelTypes": "text",
+        "isStacked": false,
+        "nullZeroValues": "zero",
+        "opacity": "1",
+        "softMin": 0,
+        "softMax": 0,
+        "timePreference": "GLOBAL_TIME",
+        "yAxisUnit": "",
+        "selectedLogFields": [],
+        "selectedTracesFields": [],
+        "markdownContent": "### One-time Init Services\n\nThe containers below run once on stack startup and exit with `code 0`. **Seeing them stopped is normal — do not page.**\n\n| Container | Compose file | Purpose |\n|---|---|---|\n| `rre-signoz-schema-init` | `docker-compose.observability.yml` | Syncs ClickHouse schema for SigNoz via `signoz-schema-migrator` |\n| `rre-redpanda-init` | `docker-compose.yml` | Creates Kafka topics in the Redpanda 3-node cluster |\n\nBoth services use `depends_on` with `service_healthy` conditions and exit 0 once complete.",
+        "query": {
+          "queryType": "clickhouse_sql",
+          "promql": [],
+          "builder": { "queryData": [], "queryFormulas": [] },
+          "clickhouse_sql": []
+        }
+      },
 
       {
         "id": "stat-total-spans",

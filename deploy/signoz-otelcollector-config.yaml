@@ -45,6 +45,18 @@ exporters:
       enabled: true
       queue_size: 100
       num_consumers: 5
+  clickhouselogsexporter:
+    dsn: tcp://admin:27ff0399-0d3a-4bd8-919d-17c2181e6fb9@signoz-clickhouse:9000/signoz_logs
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      queue_size: 100
+      num_consumers: 5
   signozclickhousemetrics:
     dsn: tcp://admin:27ff0399-0d3a-4bd8-919d-17c2181e6fb9@signoz-clickhouse:9000/signoz_metrics
   prometheus:
@@ -64,3 +76,7 @@ service:
     metrics/spanmetrics:
       receivers: [otlp/spanmetrics]
       exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouselogsexporter]

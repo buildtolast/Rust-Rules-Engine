@@ -5,6 +5,8 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  fluentforward:
+    endpoint: 0.0.0.0:24224
 
 processors:
   batch:
@@ -27,5 +29,9 @@ service:
       exporters: [otlp]
     metrics:
       receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp, fluentforward]
       processors: [batch]
       exporters: [otlp]

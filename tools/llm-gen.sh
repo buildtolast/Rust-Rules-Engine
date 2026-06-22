@@ -22,16 +22,17 @@ export BASE_URL MODEL LLM_USAGE_LOG RAW OUT SPEC
 python3 - <<'PY'
 import json, os, re, sys, datetime, urllib.request, urllib.error
 
+SYSTEM = (
+    "You are an expert software engineer. Produce complete, compilable code with "
+    "no placeholders or TODOs. Reply with exactly one fenced code block containing "
+    "the full file and nothing outside it."
+)
 body = json.dumps({
     "model": os.environ["MODEL"],
     "temperature": 0.2,
     "max_tokens": 16384,
     "messages": [
-        {"role": "system", "content":
-            "You are an expert Java 21 / Spring Boot engineer. Produce complete, "
-            "compilable code with no placeholders or TODOs. Reply with exactly one "
-            "fenced code block containing the full file and nothing outside it."},
-        {"role": "user", "content": os.environ["SPEC"]},
+        {"role": "user", "content": SYSTEM + "\n\n" + os.environ["SPEC"]},
     ],
 }).encode()
 

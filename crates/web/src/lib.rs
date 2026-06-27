@@ -15,6 +15,8 @@
 
 mod error;
 mod routes;
+#[cfg(test)]
+mod tests;
 
 pub use error::ApiError;
 

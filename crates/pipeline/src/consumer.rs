@@ -335,3 +335,44 @@ pub async fn run(
         r = ch_handle => r?,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rules_core::audit_id;
+
+    // ── Test 4: audit_id construction ────────────────────────────────────────
+
+    #[test]
+    fn test_audit_id_format() {
+        let id = audit_id("source-events", 0, 42, "rule-1");
+        assert_eq!(id, "source-events:0:42:rule-1");
+    }
+
+    #[test]
+    fn test_audit_id_negative_partition_and_large_offset() {
+        // Partition is i32; offset is i64. Both may be large/negative in practice.
+        let id = audit_id("my-topic", 3, 1_000_000, "rule-abc");
+        assert_eq!(id, "my-topic:3:1000000:rule-abc");
+    }
+
+    #[test]
+    fn test_audit_id_uniqueness_by_rule() {
+        let id_a = audit_id("events", 0, 10, "rule-A");
+        let id_b = audit_id("events", 0, 10, "rule-B");
+        assert_ne!(id_a, id_b, "different rules on the same event must yield distinct audit IDs");
+    }
+
+    #[test]
+    fn test_audit_id_uniqueness_by_offset() {
+        let id_a = audit_id("events", 0, 1, "rule-X");
+        let id_b = audit_id("events", 0, 2, "rule-X");
+        assert_ne!(id_a, id_b, "same rule on different offsets must yield distinct audit IDs");
+    }
+
+    #[test]
+    fn test_audit_id_uniqueness_by_partition() {
+        let id_a = audit_id("events", 0, 5, "rule-X");
+        let id_b = audit_id("events", 1, 5, "rule-X");
+        assert_ne!(id_a, id_b, "same rule/offset on different partitions must yield distinct IDs");
+    }
+}

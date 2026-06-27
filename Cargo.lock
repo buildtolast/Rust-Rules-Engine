@@ -3314,6 +3314,7 @@ dependencies = [
  "clickhouse",
  "eval",
  "futures",
+ "http-body-util",
  "pipeline",
  "rdkafka",
  "rules-core",
@@ -3326,6 +3327,7 @@ dependencies = [
  "tokio",
  "tower 0.4.13",
  "tower-http",
+ "tower-service",
  "tracing",
  "uuid",
 ]

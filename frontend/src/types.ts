@@ -70,7 +70,7 @@ export interface Incident {
 export interface AuditRecord {
   auditId: string;
   ruleId: string;
-  auditType: 'Matched' | 'Unmatched' | 'Error';
+  auditType: 'MATCHED' | 'UNMATCHED' | 'ERRORED';
   reason?: string;
   sourceEvent: string;
   routedEvent?: string;

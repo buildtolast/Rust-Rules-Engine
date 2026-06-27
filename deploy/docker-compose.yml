@@ -255,7 +255,7 @@ services:
       timeout: 5s
       retries: 8
     deploy:
-      replicas: 2
+      replicas: ${APP_REPLICAS:-2}
       resources:
         limits:
           memory: ${APP_MEM_LIMIT:-512M}

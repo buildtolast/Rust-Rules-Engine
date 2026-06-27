@@ -2,6 +2,21 @@
 # Rust-Rules-Engine End-to-End Runner
 # Starts the full stack: Redpanda, ClickHouse, Postgres, rules-engine, frontend, SRE agent.
 
+# ── Connection matrix ─────────────────────────────────────────────────────────
+# rules-engine → Postgres:   DATABASE_URL (default: postgres://rules:rules@postgres:5432/ruleaudit)
+# rules-engine → ClickHouse: CLICKHOUSE_URL (default: http://clickhouse:8123), DB: ruleaudit
+# rules-engine → Redpanda:   KAFKA_BROKERS (default: redpanda-0:9092,redpanda-1:9092,redpanda-2:9092)
+# sre-agent    → Postgres:   same DATABASE_URL (via app service environment)
+# sre-agent    → ClickHouse: same CLICKHOUSE_URL
+# sre-agent    → Docker:     /var/run/docker.sock (read-only bind mount)
+# frontend     → app:        HTTP proxy via nginx on port 3000 (FRONTEND_PORT)
+#
+# Migration note: the rules-engine binary runs Postgres and ClickHouse migrations
+# on startup (store_postgres::run_migrations, store_clickhouse::run_migrations).
+# No external migration step is needed. Ordering is enforced by docker-compose
+# depends_on: condition: service_healthy on postgres and clickhouse services.
+# ─────────────────────────────────────────────────────────────────────────────
+
 set -e
 
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"

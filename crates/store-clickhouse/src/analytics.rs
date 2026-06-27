@@ -210,3 +210,223 @@ pub async fn query_analytics(
         avg_total_time_nano: avg_total,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+    use serde_json::Value;
+
+    // ── Unit tests (no DB) ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_analytics_stats_dto_serializes_to_camel_case() {
+        let stats = AnalyticsStats {
+            total_messages: 100,
+            total_evaluations: 50,
+            rule_stats: vec![],
+            time_series: vec![],
+            avg_parse_time_nano: 1_000,
+            avg_eval_time_nano: 2_000,
+            avg_total_time_nano: 3_000,
+        };
+        let v: Value = serde_json::to_value(&stats).expect("serialization failed");
+        assert!(v.get("totalMessages").is_some(), "expected totalMessages");
+        assert!(v.get("totalEvaluations").is_some(), "expected totalEvaluations");
+        assert!(v.get("ruleStats").is_some(), "expected ruleStats");
+        assert!(v.get("timeSeries").is_some(), "expected timeSeries");
+        assert!(v.get("avgParseTimeNano").is_some(), "expected avgParseTimeNano");
+        assert!(v.get("avgEvalTimeNano").is_some(), "expected avgEvalTimeNano");
+        assert!(v.get("avgTotalTimeNano").is_some(), "expected avgTotalTimeNano");
+
+        // Snake-case keys must NOT appear
+        assert!(v.get("total_messages").is_none());
+        assert!(v.get("rule_stats").is_none());
+
+        // Values round-trip correctly
+        assert_eq!(v["totalMessages"], 100u64);
+        assert_eq!(v["totalEvaluations"], 50u64);
+        assert_eq!(v["avgParseTimeNano"], 1_000u64);
+    }
+
+    #[test]
+    fn test_rule_stat_serializes_camel_case() {
+        let stat = RuleStat {
+            rule_id: "r1".into(),
+            matched: 10,
+            unmatched: 2,
+            errored: 1,
+        };
+        let v: Value = serde_json::to_value(&stat).expect("serialization failed");
+        assert!(v.get("ruleId").is_some(), "expected ruleId");
+        assert!(v.get("matched").is_some(), "expected matched");
+        assert!(v.get("unmatched").is_some(), "expected unmatched");
+        assert!(v.get("errored").is_some(), "expected errored");
+
+        assert!(v.get("rule_id").is_none(), "snake_case key must not appear");
+
+        assert_eq!(v["ruleId"], "r1");
+        assert_eq!(v["matched"], 10u64);
+        assert_eq!(v["unmatched"], 2u64);
+        assert_eq!(v["errored"], 1u64);
+    }
+
+    #[test]
+    fn test_time_series_point_timestamp_serializes() {
+        let ts = Utc.timestamp_opt(0, 0).single().expect("valid timestamp");
+        let point = TimeSeriesPoint {
+            timestamp: ts,
+            rule_id: "rule-42".into(),
+            matched: 5,
+            unmatched: 1,
+            errored: 0,
+        };
+        let v: Value = serde_json::to_value(&point).expect("serialization failed");
+        assert!(v.get("timestamp").is_some(), "expected timestamp field");
+        // chrono with serde serializes DateTime<Utc> as RFC 3339 string
+        let ts_str = v["timestamp"].as_str().expect("timestamp should be a string");
+        assert!(
+            ts_str.contains("1970"),
+            "epoch timestamp should contain 1970, got: {ts_str}"
+        );
+        assert!(v.get("ruleId").is_some(), "expected ruleId (camelCase)");
+        assert!(v.get("rule_id").is_none(), "snake_case must not appear");
+    }
+
+    #[test]
+    fn test_audit_query_row_fields_match_schema() {
+        // AuditQueryRow has no #[serde(rename_all)] so serde keys stay snake_case.
+        let row = AuditQueryRow {
+            audit_id: "topic:0:1:rule-1".into(),
+            rule_id: "rule-1".into(),
+            audit_type: "MATCHED".into(),
+            reason: "".into(),
+            source_event: r#"{"key":"val"}"#.into(),
+            routed_event: r#"{"key":"val"}"#.into(),
+            source_topic: "events".into(),
+            partition: 0,
+            offset: 1,
+            timestamp_secs: 1_700_000_000,
+            parse_time_nano: 500,
+            eval_time_nano: 800,
+            total_time_nano: 1_300,
+        };
+        let v: Value = serde_json::to_value(&row).expect("serialization failed");
+
+        // No rename_all — all keys are snake_case
+        assert!(v.get("audit_id").is_some(), "expected audit_id");
+        assert!(v.get("rule_id").is_some(), "expected rule_id");
+        assert!(v.get("audit_type").is_some(), "expected audit_type");
+        assert!(v.get("reason").is_some(), "expected reason");
+        assert!(v.get("source_event").is_some(), "expected source_event");
+        assert!(v.get("routed_event").is_some(), "expected routed_event");
+        assert!(v.get("source_topic").is_some(), "expected source_topic");
+        assert!(v.get("partition").is_some(), "expected partition");
+        assert!(v.get("offset").is_some(), "expected offset");
+        assert!(v.get("timestamp_secs").is_some(), "expected timestamp_secs");
+        assert!(v.get("parse_time_nano").is_some(), "expected parse_time_nano");
+        assert!(v.get("eval_time_nano").is_some(), "expected eval_time_nano");
+        assert!(v.get("total_time_nano").is_some(), "expected total_time_nano");
+
+        // CamelCase keys must NOT appear (no rename_all on this struct)
+        assert!(v.get("auditId").is_none());
+        assert!(v.get("ruleId").is_none());
+
+        assert_eq!(v["audit_type"], "MATCHED");
+        assert_eq!(v["partition"], 0i32);
+        assert_eq!(v["offset"], 1i64);
+    }
+
+    // ── Integration tests (require live ClickHouse + INTEGRATION env var) ─────
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_query_analytics_integration() {
+        if std::env::var("INTEGRATION").is_err() {
+            return;
+        }
+
+        use crate::{client, AuditWriter, ClickHouseConfig};
+        use rules_core::{AuditRecord, AuditType};
+
+        let cfg = ClickHouseConfig {
+            url: std::env::var("CLICKHOUSE_URL")
+                .unwrap_or_else(|_| "http://localhost:8123".into()),
+            ..ClickHouseConfig::default()
+        };
+        let ch = client(&cfg);
+        let mut writer = AuditWriter::new(&ch, &cfg);
+
+        let now = Utc::now();
+        for i in 0u64..3 {
+            let rec = AuditRecord {
+                audit_id: format!("test-topic:0:{i}:rule-integration"),
+                rule_id: "rule-integration".into(),
+                schema_version: 1,
+                audit_type: AuditType::Matched,
+                reason: None,
+                source_event: r#"{"x":1}"#.into(),
+                routed_event: Some(r#"{"x":1}"#.into()),
+                source_topic: "test-topic".into(),
+                partition: 0,
+                offset: i as i64,
+                timestamp: now,
+                parse_time_nano: 100,
+                eval_time_nano: 200,
+                total_time_nano: 300,
+            };
+            writer.write(&rec).await.expect("write failed");
+        }
+        writer.end().await.expect("flush failed");
+
+        // Give ClickHouse a moment for the MV to process
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        let from = now - chrono::Duration::hours(1);
+        let to = now + chrono::Duration::hours(1);
+        let stats = query_analytics(&ch, from, to)
+            .await
+            .expect("query_analytics failed");
+
+        assert!(
+            stats.total_evaluations >= 3,
+            "expected at least 3 evaluations, got {}",
+            stats.total_evaluations
+        );
+        assert!(
+            !stats.rule_stats.is_empty(),
+            "expected non-empty rule_stats"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_query_top_audits_integration() {
+        if std::env::var("INTEGRATION").is_err() {
+            return;
+        }
+
+        use crate::{client, ClickHouseConfig};
+
+        let cfg = ClickHouseConfig {
+            url: std::env::var("CLICKHOUSE_URL")
+                .unwrap_or_else(|_| "http://localhost:8123".into()),
+            ..ClickHouseConfig::default()
+        };
+        let ch = client(&cfg);
+
+        let now = Utc::now();
+        let from = now - chrono::Duration::hours(1);
+        let to = now + chrono::Duration::hours(1);
+
+        let result = query_top_audits(&ch, "MATCHED", from, to, 10).await;
+        assert!(result.is_ok(), "query_top_audits returned Err: {:?}", result);
+        // Length may be 0 if no MATCHED rows exist — that is a valid state.
+        let rows = result.unwrap();
+        assert!(
+            rows.len() <= 10,
+            "limit=10 but got {} rows",
+            rows.len()
+        );
+    }
+}

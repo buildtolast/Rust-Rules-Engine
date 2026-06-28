@@ -64,10 +64,13 @@ pub const MIGRATION_SRE: &str =
     include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
 pub const MIGRATION_ANALYTICS: &str =
     include_str!("../../../migrations/clickhouse/0003_analytics.sql");
+pub const MIGRATION_PIPELINE_LAG: &str =
+    include_str!("../../../migrations/clickhouse/0005_pipeline_lag.sql");
 
 pub async fn run_migrations(client: &Client) -> Result<(), Error> {
     client.query(MIGRATION_AUDITS).execute().await?;
     client.query(MIGRATION_SRE).execute().await?;
+    client.query(MIGRATION_PIPELINE_LAG).execute().await?;
     for stmt in MIGRATION_ANALYTICS.split(";\n\n") {
         let stmt = stmt.trim();
         if !stmt.is_empty() {

@@ -4,10 +4,10 @@
 # dynamic system libs; even with `cmake` the openssl-sys musl build path adds
 # significant complexity for marginal gain. bookworm-slim ships these as tiny
 # shared libs and produces a reproducible, < 120 MB final image.
-FROM rust:1.87-slim AS builder
+FROM rust:1.94-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake libssl-dev pkg-config libsasl2-dev \
+    cmake libssl-dev pkg-config libsasl2-dev g++ make \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

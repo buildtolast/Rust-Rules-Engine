@@ -3,7 +3,7 @@
          max_bytes_before_external_group_by is a query-level setting and must
          NOT go here — it belongs in users.xml profiles, not config.d/. -->
     <max_concurrent_queries>200</max_concurrent_queries>
-    <!-- Allow ClickHouse to use up to 3 GiB for query execution.
-         Docker container limit is 4G (CLICKHOUSE_MEM_LIMIT); leave 1G headroom for OS. -->
-    <max_server_memory_usage>3221225472</max_server_memory_usage>
+    <!-- Allow ClickHouse to use up to 5 GiB for query execution.
+         Docker container limit must be >= 6G (CLICKHOUSE_MEM_LIMIT); leave ~1 GiB headroom for OS. -->
+    <max_server_memory_usage>5368709120</max_server_memory_usage>
 </clickhouse>

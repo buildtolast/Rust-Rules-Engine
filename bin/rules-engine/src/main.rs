@@ -110,6 +110,8 @@ async fn main() -> anyhow::Result<()> {
         consumer_group,
         transactional_id: txn_id,
         schema_version: 1,
+        database_url: pg_url.clone(),
+        clickhouse_url: ch_cfg.url.clone(),
     };
     let cache_pipeline = cache.clone();
     let ch_cfg_pipeline = ch_cfg.clone();

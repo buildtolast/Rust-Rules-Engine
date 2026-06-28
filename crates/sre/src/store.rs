@@ -259,3 +259,44 @@ impl SreStore {
         Ok(())
     }
 }
+
+/// Query the latest two rows from `pipeline_lag` for group `rules-engine`.
+/// Returns `(total_lag, lag_trend, ch_backlog_batches)`.
+/// Falls back to `(0, "stable", 0)` when the table is absent or empty.
+pub async fn fetch_pipeline_lag(ch: &Client) -> (i64, String, i32) {
+    #[derive(clickhouse::Row, serde::Deserialize)]
+    struct LagRow {
+        total_lag: i64,
+        ch_backlog_batches: i32,
+    }
+
+    let rows: Vec<LagRow> = match ch
+        .query(
+            "SELECT total_lag, ch_backlog_batches \
+             FROM pipeline_lag \
+             WHERE consumer_group = 'rules-engine' \
+             ORDER BY recorded_at DESC \
+             LIMIT 2",
+        )
+        .fetch_all()
+        .await
+    {
+        Ok(r) => r,
+        Err(_) => return (0, "stable".into(), 0),
+    };
+
+    match rows.as_slice() {
+        [] => (0, "stable".into(), 0),
+        [latest] => (latest.total_lag, "stable".into(), latest.ch_backlog_batches),
+        [latest, prev, ..] => {
+            let trend = if latest.total_lag > prev.total_lag {
+                "growing"
+            } else if latest.total_lag < prev.total_lag {
+                "draining"
+            } else {
+                "stable"
+            };
+            (latest.total_lag, trend.into(), latest.ch_backlog_batches)
+        }
+    }
+}

@@ -1,6 +1,7 @@
 use crate::{analysis::AnalysisClient, store::{Incident, SreStore}, trace_analysis, Finding, SreState};
 use axum::{
     extract::State,
+    http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
         Html,
@@ -245,6 +246,99 @@ async fn traces_insights(State(s): State<AppState>) -> Json<trace_analysis::Trac
     Json(insights)
 }
 
+async fn system_ready(
+    State(app): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let st = app.state.read().await;
+    let (total_lag, lag_trend, ch_backlog_batches) =
+        crate::store::fetch_pipeline_lag(&app.ch).await;
+
+    // Build service map from last probe result.
+    let services_map: serde_json::Value = match &st.last_probe {
+        Some(probe) => {
+            let mut map = serde_json::Map::new();
+            for svc in &probe.services {
+                map.insert(
+                    svc.name.clone(),
+                    serde_json::json!({
+                        "ok": svc.ok,
+                        "latency_ms": svc.latency_ms,
+                        "error": svc.error,
+                    }),
+                );
+            }
+            serde_json::Value::Object(map)
+        }
+        None => serde_json::json!({}),
+    };
+
+    let all_services_ok = st
+        .last_probe
+        .as_ref()
+        .map(|p| p.all_ok)
+        .unwrap_or(false);
+
+    let ready = all_services_ok && total_lag == 0;
+    let degraded = !ready;
+
+    // HTTP 503 only when both postgres AND kafka are unreachable.
+    let postgres_ok = st
+        .last_probe
+        .as_ref()
+        .and_then(|p| p.services.iter().find(|s| s.name == "postgres"))
+        .map(|s| s.ok)
+        .unwrap_or(true);
+    let kafka_ok = st
+        .last_probe
+        .as_ref()
+        .and_then(|p| p.services.iter().find(|s| s.name == "kafka"))
+        .map(|s| s.ok)
+        .unwrap_or(true);
+    let status_code = if !postgres_ok && !kafka_ok {
+        StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        StatusCode::OK
+    };
+
+    let probed_at = st
+        .last_probe
+        .as_ref()
+        .map(|p| p.probed_at.to_rfc3339())
+        .unwrap_or_default();
+
+    let backlog = match &st.weakest_link {
+        Some(wl) => serde_json::json!({
+            "consumer_lag_total": total_lag,
+            "lag_trend": lag_trend,
+            "ch_backlog_batches": ch_backlog_batches,
+            "weakest_link": wl.weakest_link,
+            "weakest_link_reasoning": wl.reasoning,
+            "recommended_action": wl.recommended_action,
+            "severity": wl.severity,
+        }),
+        None => serde_json::json!({
+            "consumer_lag_total": total_lag,
+            "lag_trend": lag_trend,
+            "ch_backlog_batches": ch_backlog_batches,
+            "weakest_link": null,
+            "weakest_link_reasoning": null,
+            "recommended_action": null,
+            "severity": null,
+        }),
+    };
+
+    (
+        status_code,
+        Json(serde_json::json!({
+            "ready": ready,
+            "degraded": degraded,
+            "services": services_map,
+            "backlog": backlog,
+            "probed_at": probed_at,
+        })),
+    )
+}
+
 async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({"ok": true}))
 }
@@ -265,6 +359,7 @@ pub async fn serve(
         .route("/api/sre/findings/stream", get(findings_sse))
         .route("/api/sre/outages", get(outages))
         .route("/api/sre/traces/insights", get(traces_insights))
+        .route("/api/system/ready", get(system_ready))
         .route("/health", get(health_check))
         .with_state(app_state);
 

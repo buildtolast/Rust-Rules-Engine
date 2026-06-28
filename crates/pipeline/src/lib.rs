@@ -3,6 +3,7 @@
 pub mod consumer;
 pub mod metrics;
 pub mod rule_cache;
+pub mod wal;
 pub use consumer::{run, PipelineConfig, PipelineError};
 pub use metrics::PipelineCounters;
 pub use rule_cache::{watch_and_reload, CacheError, RuleCache};

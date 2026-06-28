@@ -32,6 +32,7 @@ import { MetricsTab } from './MetricsTab';
 import { ConfigTab } from './ConfigTab';
 import { TracingInsightsTab } from './TracingInsightsTab';
 import { HealthBar } from './HealthBar';
+import { SystemHealthOverlay } from './SystemHealthOverlay';
 import { AlertTriangle, X as XIcon } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -222,6 +223,7 @@ const App: React.FC = () => {
           </button>
         </div>
       )}
+      <SystemHealthOverlay />
       <HealthBar />
       <div className="max-w-6xl mx-auto p-4 md:p-8">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">

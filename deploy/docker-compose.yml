@@ -140,10 +140,11 @@ services:
     volumes:
       - rre-clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/memory.xml:ro
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/memory.xml:ro
     deploy:
       resources:
         limits:
-          memory: ${CLICKHOUSE_MEM_LIMIT:-4G}
+          memory: ${CLICKHOUSE_MEM_LIMIT:-6G}
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
       interval: 10s
@@ -236,6 +237,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
       OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-0.1}
+      CH_WAL_PATH: /data/ch-audit.wal
+    volumes:
+      - rre-app-wal:/data
     logging:
       driver: fluentd
       options:
@@ -287,6 +291,12 @@ services:
       RUST_LOG: info
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
       OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-1.0}
+      KAFKA_BROKERS: redpanda-0:9092,redpanda-1:9092,redpanda-2:9092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: rules
+      POSTGRES_PASSWORD: rules
+      APP_URL: http://app:8080
     logging:
       driver: fluentd
       options:
@@ -297,6 +307,8 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       clickhouse:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8088/health || exit 1"]
@@ -342,3 +354,4 @@ volumes:
   rre-clickhouse-data:
   rre-postgres-data:
   rre-postgres-replica-data:
+  rre-app-wal:

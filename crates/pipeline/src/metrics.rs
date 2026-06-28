@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU64, Ordering::Relaxed};
 use std::time::Instant;
 
 /// Atomic counters updated by the pipeline consumer loop.
@@ -9,6 +9,9 @@ pub struct PipelineCounters {
     pub eval_ms_total: AtomicU64,
     pub txn_ms_total: AtomicU64,
     pub consumer_lag: AtomicI64,
+    /// Number of audit batches written to the WAL but not yet confirmed written
+    /// to ClickHouse. Driven by `wal::run_writer`; exposed here for health/metrics.
+    pub ch_backlog_batches: AtomicI32,
     pub started_at: Instant,
 }
 
@@ -26,6 +29,7 @@ impl PipelineCounters {
             eval_ms_total: AtomicU64::new(0),
             txn_ms_total: AtomicU64::new(0),
             consumer_lag: AtomicI64::new(0),
+            ch_backlog_batches: AtomicI32::new(0),
             started_at: Instant::now(),
         }
     }

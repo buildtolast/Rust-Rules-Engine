@@ -51,6 +51,30 @@ services:
       signoz-clickhouse:
         condition: service_healthy
 
+  # Patches the SigNoz schema to add 'scope' to the tagType Enum8.
+  # signoz-otel-collector v0.144.5 emits scope-level attributes with tagType='scope'
+  # but the migrator only creates Enum8('tag'=1,'resource'=2). ALTER TABLE is
+  # idempotent on ClickHouse when the value already exists.
+  signoz-schema-patch:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: rre-signoz-schema-patch
+    entrypoint: >
+      sh -c "
+        clickhouse-client
+          --host signoz-clickhouse
+          --port 9000
+          --user admin
+          --password '${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}'
+          --query \"
+            ALTER TABLE signoz_traces.tag_attributes
+            MODIFY COLUMN tagType Enum8('tag'=1,'resource'=2,'scope'=3)
+          \" || true
+      "
+    depends_on:
+      signoz-schema-migrator:
+        condition: service_completed_successfully
+    restart: "no"
+
   signoz-otelcollector:
     image: signoz/signoz-otel-collector:v0.144.5
     container_name: rre-signoz-otelcollector
@@ -59,16 +83,17 @@ services:
     volumes:
       - ./signoz-otelcollector-config.yaml:/etc/otel/config.yaml:ro
     depends_on:
-      signoz-schema-migrator:
+      signoz-schema-patch:
         condition: service_completed_successfully
 
   signoz:
     image: signoz/signoz:v0.129.0
     container_name: rre-signoz
     environment:
-      STORAGE: clickhouse
-      ClickHouseUrl: http://admin:${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}@signoz-clickhouse:8123
-      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
+      SIGNOZ_TOKENIZER_JWT_SECRET: ${SIGNOZ_JWT_SECRET:-c125dc1ae488847005fbbc6f0c5d6dafa618e80525e097052769b956aca31355}
+      SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: http://admin:${SIGNOZ_CH_PASSWORD:-27ff0399-0d3a-4bd8-919d-17c2181e6fb9}@signoz-clickhouse:8123
+      SIGNOZ_SQLSTORE_SQLITE_PATH: /var/lib/signoz/signoz.db
     ports:
       - "${SIGNOZ_PORT:-3301}:8080"
     volumes:

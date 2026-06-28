@@ -1,0 +1,9 @@
+<clickhouse>
+  <profiles>
+    <default>
+      <!-- Cap any single query (including inserts) at 3 GiB so one large
+           ingest cannot exhaust the 5 GiB server budget. -->
+      <max_memory_usage>3221225472</max_memory_usage>
+    </default>
+  </profiles>
+</clickhouse>

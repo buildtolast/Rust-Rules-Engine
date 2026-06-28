@@ -1,13 +1,15 @@
 pub mod analysis;
 pub mod dashboard;
 pub mod docker;
+pub mod probes;
 pub mod store;
 pub mod trace_analysis;
 
-use analysis::{AnalysisClient, Finding};
+use analysis::{AnalysisClient, Finding, WeakestLinkDecision};
 use chrono::{DateTime, Utc};
 use clickhouse::Client;
 use docker::ContainerInfo;
+use probes::{ProbeConfig, SystemProbeResult};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -32,6 +34,7 @@ pub struct SreConfig {
     pub dashboard_port: u16,
     pub auto_restart: bool,
     pub restart_cooldown_secs: u64,
+    pub probe: ProbeConfig,
 }
 
 // ── Shared state ────────────────────────────────────────────────────────────
@@ -53,6 +56,8 @@ pub struct SreState {
     pub findings: VecDeque<Finding>,
     pub last_scan_at: Option<DateTime<Utc>>,
     pub llm_available: bool,
+    pub last_probe: Option<SystemProbeResult>,
+    pub weakest_link: Option<WeakestLinkDecision>,
 }
 
 impl SreState {
@@ -62,6 +67,8 @@ impl SreState {
             findings: VecDeque::new(),
             last_scan_at: None,
             llm_available: false,
+            last_probe: None,
+            weakest_link: None,
         }
     }
 
@@ -109,6 +116,7 @@ async fn scan_once(
     state: &Arc<RwLock<SreState>>,
     tx: &broadcast::Sender<Finding>,
     cfg: &SreConfig,
+    ch: &Client,
 ) {
     let containers = match docker::list_containers(docker).await {
         Ok(v) => v,
@@ -136,10 +144,44 @@ async fn scan_once(
         st.last_scan_at = Some(Utc::now());
     }
 
+    // Run independent service probes concurrently with container scanning setup.
+    let probe_result = probes::probe_all(&cfg.probe).await;
+
+    // Store probe result in shared state.
+    {
+        let mut st = state.write().await;
+        st.last_probe = Some(probe_result.clone());
+    }
+
+    // Analyze containers.
     for c in &containers {
         analyze_container(c, docker, llm, store, state, tx, cfg).await;
         // Give the single-process inference server breathing room between requests.
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+
+    // Fetch lag info from ClickHouse.
+    let (total_lag, lag_trend, ch_backlog_batches) = store::fetch_pipeline_lag(ch).await;
+
+    // Call weakest-link decision if there's something to analyze.
+    let any_service_down = !probe_result.all_ok;
+    if total_lag > 0 || any_service_down {
+        let recent_findings: Vec<Finding> = {
+            let st = state.read().await;
+            st.findings.iter().cloned().collect()
+        };
+        let decision = llm
+            .decide_weakest_link(
+                &probe_result,
+                total_lag,
+                &lag_trend,
+                ch_backlog_batches,
+                &recent_findings,
+            )
+            .await;
+
+        let mut st = state.write().await;
+        st.weakest_link = decision;
     }
 }
 
@@ -343,7 +385,7 @@ async fn analysis_loop(
     let mut store = SreStore::new(&ch);
 
     loop {
-        scan_once(&docker, &llm, &mut store, &state, &tx, &cfg).await;
+        scan_once(&docker, &llm, &mut store, &state, &tx, &cfg, &ch).await;
         tokio::time::sleep(cfg.scan_interval).await;
     }
 }

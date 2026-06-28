@@ -1,3 +1,4 @@
+use crate::probes::SystemProbeResult;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -20,6 +21,14 @@ pub struct Finding {
     pub container_name: String,
     #[serde(default)]
     pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WeakestLinkDecision {
+    pub weakest_link: String,
+    pub reasoning: String,
+    pub recommended_action: String,
+    pub severity: String,
 }
 
 #[derive(Clone)]
@@ -134,6 +143,144 @@ impl AnalysisClient {
             .ok_or_else(|| AnalysisError::ParseError("missing content field".into()))?;
 
         extract_json(content)
+    }
+
+    pub async fn decide_weakest_link(
+        &self,
+        probe: &SystemProbeResult,
+        total_lag: i64,
+        lag_trend: &str,
+        ch_backlog_batches: i32,
+        recent_findings: &[Finding],
+    ) -> Option<WeakestLinkDecision> {
+        let system_prompt = "You are an SRE agent deciding which service is the weakest link in a \
+            distributed system. Respond ONLY with valid JSON: \
+            {\"weakest_link\":\"...\",\"reasoning\":\"...\",\"recommended_action\":\"...\",\"severity\":\"...\"} \
+            weakest_link must be one of: postgres, clickhouse, kafka, app, none. \
+            severity must be one of: INFO, WARN, ERROR, CRITICAL.";
+
+        let service_lines: String = probe
+            .services
+            .iter()
+            .map(|s| {
+                if s.ok {
+                    format!("  {}: ok ({}ms)", s.name, s.latency_ms)
+                } else {
+                    format!(
+                        "  {}: ERROR: {}",
+                        s.name,
+                        s.error.as_deref().unwrap_or("unknown")
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let findings_lines: String = recent_findings
+            .iter()
+            .rev()
+            .take(5)
+            .map(|f| format!("  {}: [{}] {}", f.container_name, f.severity, f.finding))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let user_content = format!(
+            "Consumer lag: {total_lag} messages ({lag_trend})\n\
+             ClickHouse backlog: {ch_backlog_batches} buffered audit batches\n\
+             Service health:\n{service_lines}\n\
+             Recent findings (last 5):\n{}",
+            if findings_lines.is_empty() {
+                "  (none)".to_string()
+            } else {
+                findings_lines
+            }
+        );
+
+        let body = serde_json::json!({
+            "model": self.model,
+            "messages": [
+                { "role": "system", "content": system_prompt },
+                { "role": "user",   "content": user_content  }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 512
+        });
+
+        let mut last_err: Option<String> = None;
+        let mut result_text: Option<String> = None;
+
+        for attempt in 0..2u8 {
+            if attempt > 0 {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            let mut req = self
+                .http
+                .post(format!("{}/v1/chat/completions", self.base_url))
+                .json(&body);
+            if let Some(key) = &self.api_key {
+                req = req.bearer_auth(key);
+            }
+            match req.send().await {
+                Err(e) if e.is_timeout() => {
+                    tracing::warn!("weakest-link LLM timeout");
+                    return None;
+                }
+                Err(e) => {
+                    last_err = Some(e.to_string());
+                }
+                Ok(r) if !r.status().is_success() => {
+                    last_err = Some(format!("HTTP {}", r.status()));
+                }
+                Ok(r) => {
+                    match r.json::<serde_json::Value>().await {
+                        Ok(payload) => {
+                            if let Some(content) = payload["choices"][0]["message"]["content"]
+                                .as_str()
+                            {
+                                result_text = Some(content.to_string());
+                                break;
+                            } else {
+                                last_err = Some("missing content field".into());
+                            }
+                        }
+                        Err(e) => {
+                            last_err = Some(e.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let text = match result_text {
+            Some(t) => t,
+            None => {
+                tracing::warn!(
+                    "weakest-link LLM unavailable: {}",
+                    last_err.as_deref().unwrap_or("unknown")
+                );
+                return None;
+            }
+        };
+
+        // Strip <think> blocks
+        let buf;
+        let text_ref = if let (Some(s), Some(e)) = (text.find("<think>"), text.find("</think>")) {
+            buf = format!("{}{}", &text[..s], &text[e + "</think>".len()..]);
+            buf.as_str()
+        } else {
+            text.as_str()
+        };
+
+        let start = text_ref.find('{')?;
+        let end = text_ref.rfind('}')?;
+        let raw = &text_ref[start..=end];
+
+        serde_json::from_str::<WeakestLinkDecision>(raw)
+            .or_else(|_| {
+                let fixed = quote_bare_keys(raw);
+                serde_json::from_str::<WeakestLinkDecision>(&fixed)
+            })
+            .ok()
     }
 
     /// Send a raw prompt and return the raw LLM text response.

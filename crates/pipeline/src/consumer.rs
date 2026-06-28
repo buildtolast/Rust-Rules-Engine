@@ -12,6 +12,8 @@
 //!   BATCH_TIMEOUT_MS — max wait to fill a partial batch  (default 100 ms)
 
 use std::collections::HashMap;
+use std::net::ToSocketAddrs;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -27,6 +29,8 @@ use crate::rule_cache::RuleCache;
 
 const BATCH_SIZE: usize = 2_000;
 const BATCH_TIMEOUT_MS: u64 = 100;
+const HEALTH_CHECK_INTERVAL_SECS: u64 = 15;
+const HEALTH_CHECK_TIMEOUT_SECS: u64 = 2;
 
 #[derive(Debug, Clone)]
 pub struct PipelineConfig {
@@ -36,6 +40,8 @@ pub struct PipelineConfig {
     pub consumer_group: String,
     pub transactional_id: String,
     pub schema_version: u32,
+    pub database_url: String,
+    pub clickhouse_url: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -66,29 +72,91 @@ struct MsgEval {
     rule_results: Option<Vec<(bool, rules_core::AuditRecord)>>,
 }
 
+/// Row written to `ruleaudit.pipeline_lag`.
+#[derive(Debug, Clone, clickhouse::Row, serde::Serialize)]
+struct LagRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: chrono::DateTime<chrono::Utc>,
+    consumer_group: String,
+    total_lag: i64,
+    ch_backlog_batches: i32,
+    batch_size: i32,
+    eval_ms: i64,
+    txn_ms: i64,
+}
+
 pub async fn run(
     config: PipelineConfig,
     cache: RuleCache,
     ch_cfg: store_clickhouse::ClickHouseConfig,
     counters: Arc<PipelineCounters>,
 ) -> Result<(), PipelineError> {
-    // Channel carries Vec<AuditRecord> per batch so the async writer always
-    // receives whole batches and flushes them in one ClickHouse HTTP POST.
-    let (ch_tx, mut ch_rx) = mpsc::channel::<Vec<rules_core::AuditRecord>>(32);
+    // ── Shared health flags ──────────────────────────────────────────────────
+    let postgres_healthy = Arc::new(AtomicBool::new(true));
+    let clickhouse_healthy = Arc::new(AtomicBool::new(true));
 
-    // Task A: drain audit batches → ClickHouse.
-    let ch_handle = tokio::spawn(async move {
-        let client = store_clickhouse::client(&ch_cfg);
-        let mut writer = store_clickhouse::AuditWriter::new(&client, &ch_cfg);
-        while let Some(batch) = ch_rx.recv().await {
-            if let Err(e) = writer.write_batch(&batch).await {
-                tracing::warn!("clickhouse write error: {e}");
+    // ── Shared backlog counter (written by WAL writer, read by loop) ─────────
+    let backlog_arc: Arc<AtomicI32> = Arc::new(AtomicI32::new(0));
+
+    // ── Task A: WAL-backed ClickHouse audit writer ───────────────────────────
+    let (ch_tx, ch_rx) = mpsc::channel::<Vec<rules_core::AuditRecord>>(32);
+    let backlog_writer = Arc::clone(&backlog_arc);
+
+    let ch_handle = {
+        let cfg = ch_cfg.clone();
+        tokio::spawn(async move {
+            crate::wal::run_writer(ch_rx, cfg, backlog_writer).await;
+            Ok::<(), PipelineError>(())
+        })
+    };
+
+    // ── Task B: per-dependency health checker ────────────────────────────────
+    let pg_flag = Arc::clone(&postgres_healthy);
+    let ch_flag = Arc::clone(&clickhouse_healthy);
+    let database_url = config.database_url.clone();
+    let clickhouse_url_health = config.clickhouse_url.clone();
+
+    let health_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(HEALTH_CHECK_INTERVAL_SECS));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+
+            let pg_ok = check_postgres_tcp(&database_url).await;
+            if pg_ok != pg_flag.load(Ordering::Relaxed) {
+                tracing::info!(healthy = pg_ok, "postgres health changed");
+                pg_flag.store(pg_ok, Ordering::Relaxed);
+            }
+
+            let ch_ok = check_clickhouse_ping(&clickhouse_url_health).await;
+            if ch_ok != ch_flag.load(Ordering::Relaxed) {
+                tracing::info!(healthy = ch_ok, "clickhouse health changed");
+                ch_flag.store(ch_ok, Ordering::Relaxed);
             }
         }
-        writer.end().await.map_err(PipelineError::ClickHouse)
     });
 
-    // Task B: rdkafka EOS loop.
+    // ── Task C: fire-and-forget lag writer ───────────────────────────────────
+    let (lag_tx, mut lag_rx) = mpsc::channel::<LagRow>(64);
+    let lag_ch_cfg = ch_cfg.clone();
+    let lag_handle = tokio::spawn(async move {
+        let client = store_clickhouse::client(&lag_ch_cfg);
+        while let Some(row) = lag_rx.recv().await {
+            let result = async {
+                let mut insert = client.insert::<LagRow>("pipeline_lag").await?;
+                insert.write(&row).await?;
+                insert.end().await
+            };
+            if let Err(e) = result.await {
+                tracing::debug!("lag row write failed (non-critical): {e}");
+            }
+        }
+        Ok::<(), PipelineError>(())
+    });
+
+    // ── Task D: rdkafka EOS loop ─────────────────────────────────────────────
+    let pg_flag_loop = Arc::clone(&postgres_healthy);
+    let backlog_loop = Arc::clone(&backlog_arc);
     let pipeline_handle = tokio::task::spawn_blocking(move || -> Result<(), PipelineError> {
         let counters = counters;
         let consumer: BaseConsumer = ClientConfig::new()
@@ -124,8 +192,35 @@ pub async fn run(
             "pipeline started"
         );
 
+        let mut was_paused = false;
+
         loop {
-            // ── Phase 0: collect a batch of raw messages ──────────────────
+            // ── Postgres health gate ──────────────────────────────────────────
+            let pg_ok = pg_flag_loop.load(Ordering::Relaxed);
+            if !pg_ok && !was_paused {
+                let all_partitions =
+                    consumer_all_partitions(&consumer, &config.source_topic);
+                if let Err(e) = consumer.pause(&all_partitions) {
+                    tracing::warn!("failed to pause consumer: {e}");
+                }
+                tracing::warn!("postgres unhealthy — consumer paused");
+                was_paused = true;
+            } else if pg_ok && was_paused {
+                let all_partitions =
+                    consumer_all_partitions(&consumer, &config.source_topic);
+                if let Err(e) = consumer.resume(&all_partitions) {
+                    tracing::warn!("failed to resume consumer: {e}");
+                }
+                tracing::info!("postgres healthy — consumer resumed");
+                was_paused = false;
+            }
+
+            if was_paused {
+                std::thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+
+            // ── Phase 0: collect a batch of raw messages ──────────────────────
             let mut batch: Vec<OwnedMsg> = Vec::with_capacity(BATCH_SIZE);
             let deadline = Instant::now() + Duration::from_millis(BATCH_TIMEOUT_MS);
 
@@ -176,7 +271,7 @@ pub async fn run(
             );
             let _batch_enter = batch_span.enter();
 
-            // ── Phase 1: parallel parse + eval (rayon) ────────────────────
+            // ── Phase 1: parallel parse + eval (rayon) ────────────────────────
             let rules: Arc<Vec<eval::CompiledRule>> = cache.get();
             let schema_version = config.schema_version;
 
@@ -184,7 +279,9 @@ pub async fn run(
             let msg_evals: Vec<MsgEval> = batch
                 .par_iter()
                 .map(|msg| {
-                    let _parse_span = tracing::debug_span!("event.parse", "kafka.offset" = msg.offset).entered();
+                    let _parse_span =
+                        tracing::debug_span!("event.parse", "kafka.offset" = msg.offset)
+                            .entered();
                     let parse_start = Instant::now();
                     let event = match rules_core::SourceEvent::from_kafka(
                         &msg.topic,
@@ -259,7 +356,7 @@ pub async fn run(
             let eval_ms = eval_start.elapsed().as_millis();
             batch_span.record("batch.eval_ms", eval_ms as i64);
 
-            // ── Phase 2: EOS transaction (serial) ─────────────────────────
+            // ── Phase 2: EOS transaction (serial) ─────────────────────────────
             let txn_start = Instant::now();
             producer.begin_transaction()?;
 
@@ -291,7 +388,7 @@ pub async fn run(
             let txn_ms = txn_start.elapsed().as_millis();
             batch_span.record("batch.txn_ms", txn_ms as i64);
 
-            // ── Phase 3: ship audits to ClickHouse ────────────────────────
+            // ── Phase 3: ship audits to ClickHouse (via WAL) ──────────────────
             let audits: Vec<rules_core::AuditRecord> = msg_evals
                 .into_iter()
                 .filter_map(|ev| ev.rule_results)
@@ -319,6 +416,20 @@ pub async fn run(
 
             counters.record_batch(batch.len() as u64, eval_ms as u64, txn_ms as u64, lag);
 
+            // ── Phase 4: fire-and-forget lag row to ClickHouse ────────────────
+            let ch_backlog = backlog_loop.load(Ordering::Relaxed);
+            counters.ch_backlog_batches.store(ch_backlog, Ordering::Relaxed);
+            let lag_row = LagRow {
+                ts: chrono::Utc::now(),
+                consumer_group: config.consumer_group.clone(),
+                total_lag: lag,
+                ch_backlog_batches: ch_backlog,
+                batch_size: batch.len() as i32,
+                eval_ms: eval_ms as i64,
+                txn_ms: txn_ms as i64,
+            };
+            let _ = lag_tx.try_send(lag_row); // non-blocking; loss is acceptable
+
             tracing::debug!(
                 messages = batch.len(),
                 audits = audit_count,
@@ -333,7 +444,60 @@ pub async fn run(
     tokio::select! {
         r = pipeline_handle => r?,
         r = ch_handle => r?,
+        r = lag_handle => r?,
+        _ = health_handle => Ok(()),
     }
+}
+
+/// Build a TopicPartitionList covering all partitions of `topic` visible in metadata.
+fn consumer_all_partitions(consumer: &BaseConsumer, topic: &str) -> TopicPartitionList {
+    let mut tpl = TopicPartitionList::new();
+    if let Ok(meta) = consumer.fetch_metadata(Some(topic), Duration::from_secs(2)) {
+        for t in meta.topics() {
+            for p in t.partitions() {
+                tpl.add_partition(t.name(), p.id());
+            }
+        }
+    }
+    tpl
+}
+
+/// TCP-connect check for Postgres: parse first host:port from DATABASE_URL.
+/// DATABASE_URL format: postgres://user:pass@host:port/db
+async fn check_postgres_tcp(database_url: &str) -> bool {
+    let host_port = database_url
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split('@').nth(1))
+        .and_then(|host_db| host_db.split('/').next())
+        .unwrap_or("localhost:5432");
+
+    let addrs: Vec<_> = match host_port.to_socket_addrs() {
+        Ok(a) => a.collect(),
+        Err(_) => return false,
+    };
+    for addr in addrs {
+        let result = tokio::time::timeout(
+            Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+            tokio::net::TcpStream::connect(addr),
+        )
+        .await;
+        if matches!(result, Ok(Ok(_))) {
+            return true;
+        }
+    }
+    false
+}
+
+/// HTTP GET {clickhouse_url}/ping with 2s timeout.
+async fn check_clickhouse_ping(clickhouse_url: &str) -> bool {
+    let url = format!("{clickhouse_url}/ping");
+    let result = tokio::time::timeout(
+        Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+        reqwest::get(&url),
+    )
+    .await;
+    matches!(result, Ok(Ok(r)) if r.status().is_success())
 }
 
 #[cfg(test)]
@@ -350,7 +514,6 @@ mod tests {
 
     #[test]
     fn test_audit_id_negative_partition_and_large_offset() {
-        // Partition is i32; offset is i64. Both may be large/negative in practice.
         let id = audit_id("my-topic", 3, 1_000_000, "rule-abc");
         assert_eq!(id, "my-topic:3:1000000:rule-abc");
     }

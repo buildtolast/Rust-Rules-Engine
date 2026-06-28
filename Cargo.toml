@@ -27,7 +27,7 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 cel-interpreter = { version = "0.10.0", features = ["json"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "process", "io-util"] }
 arc-swap = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

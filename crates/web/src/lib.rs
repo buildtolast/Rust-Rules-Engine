@@ -75,6 +75,7 @@ pub fn router(state: AppState, allowed_origins: Vec<axum::http::HeaderValue>) ->
         .route("/api/metrics", get(routes::metrics::metrics))
         .route("/api/simulation/push", post(routes::simulation::push))
         .route("/api/integration/status", get(routes::integration::status))
+        .route("/api/integration/run", post(routes::integration::run))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)

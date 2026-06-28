@@ -49,7 +49,7 @@ const WINDOW_MINUTES: u32 = 10;
 
 async fn query_rule_perf(ch: &Client) -> anyhow::Result<Vec<RulePerf>> {
     let sql = format!(
-        r#"SELECT
+        r"SELECT
             rule_id,
             count()                                                  AS eval_count,
             round(avg(eval_time_nano) / 1e6, 3)                     AS avg_eval_ms,
@@ -61,7 +61,7 @@ async fn query_rule_perf(ch: &Client) -> anyhow::Result<Vec<RulePerf>> {
         WHERE timestamp > now() - INTERVAL {WINDOW_MINUTES} MINUTE
         GROUP BY rule_id
         ORDER BY p95_eval_ms DESC
-        LIMIT 20"#
+        LIMIT 20"
     );
 
     ch.query(&sql)

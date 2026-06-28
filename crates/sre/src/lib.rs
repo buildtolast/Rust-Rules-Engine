@@ -58,6 +58,7 @@ pub struct SreState {
     pub llm_available: bool,
     pub last_probe: Option<SystemProbeResult>,
     pub weakest_link: Option<WeakestLinkDecision>,
+    pub last_weakest_link_at: Option<DateTime<Utc>>,
 }
 
 impl SreState {
@@ -69,6 +70,7 @@ impl SreState {
             llm_available: false,
             last_probe: None,
             weakest_link: None,
+            last_weakest_link_at: None,
         }
     }
 
@@ -103,6 +105,11 @@ async fn run_migration(client: &Client) -> anyhow::Result<()> {
 
 // ── Analysis loop ───────────────────────────────────────────────────────────
 
+fn is_one_shot_by_name(name: &str) -> bool {
+    let bare = name.trim_start_matches("rre-");
+    bare.ends_with("-init") || bare.ends_with("-patch") || bare.ends_with("-migration")
+}
+
 fn sha256_hex(s: &str) -> String {
     let mut h = Sha256::new();
     h.update(s.as_bytes());
@@ -126,11 +133,12 @@ async fn scan_once(
         }
     };
 
-    // Update container statuses in shared state
+    // Update container statuses in shared state, excluding one-time init/patch/migration jobs.
     {
         let mut st = state.write().await;
         st.containers = containers
             .iter()
+            .filter(|c| !is_one_shot_by_name(&c.name))
             .map(|c| ContainerStatus {
                 name: c.name.clone(),
                 id: c.id.clone(),
@@ -153,8 +161,11 @@ async fn scan_once(
         st.last_probe = Some(probe_result.clone());
     }
 
-    // Analyze containers.
+    // Analyze containers, skipping one-time init/patch/migration jobs.
     for c in &containers {
+        if is_one_shot_by_name(&c.name) {
+            continue;
+        }
         analyze_container(c, docker, llm, store, state, tx, cfg).await;
         // Give the single-process inference server breathing room between requests.
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -163,9 +174,15 @@ async fn scan_once(
     // Fetch lag info from ClickHouse.
     let (total_lag, lag_trend, ch_backlog_batches) = store::fetch_pipeline_lag(ch).await;
 
-    // Call weakest-link decision if there's something to analyze.
+    // Call weakest-link at most once per 60 s — it is LLM-heavy.
     let any_service_down = !probe_result.all_ok;
-    if total_lag > 0 || any_service_down {
+    let weakest_link_due = {
+        let st = state.read().await;
+        st.last_weakest_link_at
+            .map(|t| Utc::now().signed_duration_since(t).num_seconds() >= 60)
+            .unwrap_or(true)
+    };
+    if (total_lag > 0 || any_service_down) && weakest_link_due {
         let recent_findings: Vec<Finding> = {
             let st = state.read().await;
             st.findings.iter().cloned().collect()
@@ -182,6 +199,7 @@ async fn scan_once(
 
         let mut st = state.write().await;
         st.weakest_link = decision;
+        st.last_weakest_link_at = Some(Utc::now());
     }
 }
 
@@ -209,6 +227,10 @@ async fn analyze_container(
     tx: &broadcast::Sender<Finding>,
     cfg: &SreConfig,
 ) {
+    if c.one_shot && c.exit_code == Some(0) {
+        return;
+    }
+
     // Track running-state transitions — persists outage/restoration events in ClickHouse.
     // `auto_restarted` is true when the container just came back AND we were the ones
     // who restarted it (i.e. it was down in prev scan and we acted on it).

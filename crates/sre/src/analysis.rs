@@ -239,9 +239,8 @@ impl AnalysisClient {
                             {
                                 result_text = Some(content.to_string());
                                 break;
-                            } else {
-                                last_err = Some("missing content field".into());
                             }
+                            last_err = Some("missing content field".into());
                         }
                         Err(e) => {
                             last_err = Some(e.to_string());

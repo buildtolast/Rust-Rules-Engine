@@ -26,6 +26,8 @@ pub struct ContainerInfo {
     pub running: bool,
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
     pub health: HealthSummary,
+    pub one_shot: bool,
+    pub exit_code: Option<i64>,
 }
 
 fn health_from(h: Option<Health>) -> HealthSummary {
@@ -59,6 +61,14 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
         let state = inspect.state.unwrap_or_default();
 
         let running = state.running.unwrap_or(false);
+        let exit_code = state.exit_code;
+        let one_shot = inspect
+            .host_config
+            .as_ref()
+            .and_then(|hc| hc.restart_policy.as_ref())
+            .and_then(|rp| rp.name.as_ref())
+            .map(|n| matches!(n, bollard::models::RestartPolicyNameEnum::EMPTY | bollard::models::RestartPolicyNameEnum::NO))
+            .unwrap_or(true);
         let started_at = state.started_at.as_deref().and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(s)
                 .ok()
@@ -72,6 +82,8 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
             running,
             started_at,
             health,
+            one_shot,
+            exit_code,
         });
     }
     Ok(result)

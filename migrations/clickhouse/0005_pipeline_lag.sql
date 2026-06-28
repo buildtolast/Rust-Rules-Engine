@@ -10,4 +10,4 @@ CREATE TABLE IF NOT EXISTS ruleaudit.pipeline_lag
 )
 ENGINE = MergeTree()
 ORDER BY (consumer_group, ts)
-TTL ts + INTERVAL 7 DAY;
+TTL toDateTime(ts) + INTERVAL 7 DAY;

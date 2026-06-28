@@ -9,6 +9,7 @@ members = [
     "crates/web",
     "crates/sre",
     "crates/telemetry",
+    "crates/test-support",
     "bin/rules-engine",
     "bin/sre-agent",
 ]

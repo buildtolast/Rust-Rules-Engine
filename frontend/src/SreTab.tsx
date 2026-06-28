@@ -295,7 +295,7 @@ export function SreTab() {
   }, [remediateLog]);
 
   const llmAvailable = status?.llm_available ?? false;
-  const containers = status?.containers ?? [];
+  const containers = (status?.containers ?? []).filter(c => !c.name.includes('init'));
   const lastScan = status?.last_scan_at ?? null;
   const activeOutages = incidents.filter(i => i.active);
 

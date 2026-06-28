@@ -122,11 +122,19 @@ Limit each array to 5 items. Be specific — name rule IDs and techniques."#
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn strip_fences(s: &str) -> &str {
+fn extract_json(s: &str) -> &str {
+    // Strip markdown code fences first.
     let s = s.trim();
     let s = s.strip_prefix("```json").or_else(|| s.strip_prefix("```")).unwrap_or(s);
     let s = s.strip_suffix("```").unwrap_or(s);
-    s.trim()
+    let s = s.trim();
+    // Find the JSON object even when the LLM wraps it in prose or reasoning steps.
+    if let (Some(start), Some(end)) = (s.find('{'), s.rfind('}')) {
+        if start < end {
+            return &s[start..=end];
+        }
+    }
+    s
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -182,7 +190,7 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
         match llm.raw_complete(&prompt).await {
             Ok(raw) => {
                 // Strip markdown fences that local LLMs often emit despite instructions.
-                let json = strip_fences(&raw);
+                let json = extract_json(&raw);
                 match serde_json::from_str::<LlmResponse>(json) {
                     Ok(resp) => (resp.insights, resp.top_bottlenecks, resp.recommendations, true),
                     Err(e) => {

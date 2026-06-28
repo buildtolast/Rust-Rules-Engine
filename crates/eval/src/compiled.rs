@@ -51,3 +51,50 @@ pub fn compile(rule: &Rule) -> Result<CompiledRule, CompileError> {
         program,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rules_core::Rule;
+
+    fn make_rule(id: &str, expression: &str) -> Rule {
+        Rule {
+            id: id.to_owned(),
+            description: String::new(),
+            expression: expression.to_owned(),
+            target_topic: "out".to_owned(),
+            enabled: true,
+            version: 1,
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn compile_valid_expression_succeeds() {
+        let rule = make_rule("r1", "true");
+        let result = compile(&rule);
+        assert!(result.is_ok());
+        let compiled = result.unwrap();
+        assert_eq!(compiled.id, "r1");
+        assert_eq!(compiled.target_topic, "out");
+        assert_eq!(compiled.expression, "true");
+    }
+
+    #[test]
+    fn compile_invalid_expression_returns_error_with_rule_id() {
+        let rule = make_rule("bad-rule", "!!! @@ invalid CEL expression @@@ !!!");
+        let result = compile(&rule);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.rule_id, "bad-rule");
+        assert!(!err.message.is_empty());
+    }
+
+    #[test]
+    fn compile_error_display_contains_rule_id_and_message() {
+        let rule = make_rule("r-err", "??not valid");
+        let err = compile(&rule).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("r-err"), "got: {msg}");
+    }
+}

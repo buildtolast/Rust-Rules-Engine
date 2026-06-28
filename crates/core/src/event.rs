@@ -37,3 +37,33 @@ impl SourceEvent {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_json_parses_all_fields() {
+        let raw = r#"{"key": "value", "num": 42}"#;
+        let event = SourceEvent::from_kafka("test-topic", 2, 100, 1700000000000, raw).unwrap();
+        assert_eq!(event.topic, "test-topic");
+        assert_eq!(event.partition, 2);
+        assert_eq!(event.offset, 100);
+        assert_eq!(event.timestamp_ms, 1700000000000);
+        assert_eq!(event.raw, raw);
+        assert_eq!(event.payload["key"], "value");
+        assert_eq!(event.payload["num"], 42);
+    }
+
+    #[test]
+    fn invalid_json_returns_err() {
+        let result = SourceEvent::from_kafka("topic", 0, 0, 0, "{not valid json}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_string_returns_err() {
+        let result = SourceEvent::from_kafka("topic", 0, 0, 0, "");
+        assert!(result.is_err());
+    }
+}

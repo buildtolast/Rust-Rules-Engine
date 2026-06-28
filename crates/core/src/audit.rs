@@ -19,6 +19,7 @@ pub enum AuditType {
 
 /// Deterministic audit identifier. Must equal the Java format
 /// `{topic}:{partition}:{offset}:{ruleId}` — it is the dedup key.
+#[must_use]
 pub fn audit_id(topic: &str, partition: i32, offset: i64, rule_id: &str) -> String {
     format!("{topic}:{partition}:{offset}:{rule_id}")
 }
@@ -48,4 +49,56 @@ pub struct AuditRecord {
     pub parse_time_nano: u64,
     pub eval_time_nano: u64,
     pub total_time_nano: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audit_id_correct_format() {
+        let id = audit_id("my-topic", 3, 99, "rule-abc");
+        assert_eq!(id, "my-topic:3:99:rule-abc");
+    }
+
+    #[test]
+    fn audit_id_uniqueness_by_all_components() {
+        let a = audit_id("topic", 0, 0, "rule-1");
+        let b = audit_id("topic", 0, 0, "rule-2");
+        let c = audit_id("topic", 0, 1, "rule-1");
+        let d = audit_id("topic", 1, 0, "rule-1");
+        let e = audit_id("other", 0, 0, "rule-1");
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+        assert_ne!(a, d);
+        assert_ne!(a, e);
+    }
+
+    #[test]
+    fn audit_type_serializes_matched() {
+        let s = serde_json::to_string(&AuditType::Matched).unwrap();
+        assert_eq!(s, r#""MATCHED""#);
+    }
+
+    #[test]
+    fn audit_type_serializes_unmatched() {
+        let s = serde_json::to_string(&AuditType::Unmatched).unwrap();
+        assert_eq!(s, r#""UNMATCHED""#);
+    }
+
+    #[test]
+    fn audit_type_serializes_errored() {
+        let s = serde_json::to_string(&AuditType::Errored).unwrap();
+        assert_eq!(s, r#""ERRORED""#);
+    }
+
+    #[test]
+    fn audit_type_deserializes_from_screaming_snake_case() {
+        let matched: AuditType = serde_json::from_str(r#""MATCHED""#).unwrap();
+        let unmatched: AuditType = serde_json::from_str(r#""UNMATCHED""#).unwrap();
+        let errored: AuditType = serde_json::from_str(r#""ERRORED""#).unwrap();
+        assert_eq!(matched, AuditType::Matched);
+        assert_eq!(unmatched, AuditType::Unmatched);
+        assert_eq!(errored, AuditType::Errored);
+    }
 }

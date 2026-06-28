@@ -39,13 +39,12 @@ pub fn init(service_name: &str) -> ShutdownGuard {
     let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".into());
 
-    let sample_rate: f64 = match std::env::var("OTEL_SAMPLE_RATE") {
-        Ok(v) => v.parse().unwrap_or_else(|_| {
+    let sample_rate: f64 = std::env::var("OTEL_SAMPLE_RATE").map_or(0.1, |v| {
+        v.parse().unwrap_or_else(|_| {
             eprintln!("WARN: OTEL_SAMPLE_RATE={v:?} is not a valid f64, using default 0.1");
             0.1
-        }),
-        Err(_) => 0.1,
-    };
+        })
+    });
 
     global::set_text_map_propagator(TraceContextPropagator::new());
 

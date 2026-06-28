@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Activity, CheckCircle, Cpu, Clock, Wifi, WifiOff, ChevronDown, ChevronRight, AlertTriangle, RotateCcw, GitPullRequest, X } from 'lucide-react';
 import type { SreFinding, SreStatus, SreContainerStatus, Incident } from './types';
 
+function isOneShot(name: string): boolean {
+  const bare = name.replace(/^rre-/, '');
+  return bare.endsWith('-init') || bare.endsWith('-patch') || bare.endsWith('-migration') || bare.includes('init');
+}
+
 const SEVERITY_STYLES: Record<string, { badge: string; dot: string }> = {
   INFO:     { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' },
   WARN:     { badge: 'bg-amber-50 text-amber-700 border-amber-100',       dot: 'bg-amber-400' },
@@ -295,9 +300,9 @@ export function SreTab() {
   }, [remediateLog]);
 
   const llmAvailable = status?.llm_available ?? false;
-  const containers = (status?.containers ?? []).filter(c => !c.name.includes('init'));
+  const containers = (status?.containers ?? []).filter(c => !isOneShot(c.name));
   const lastScan = status?.last_scan_at ?? null;
-  const activeOutages = incidents.filter(i => i.active);
+  const activeOutages = incidents.filter(i => i.active && !isOneShot(i.container));
 
   return (
     <div className="space-y-6">
@@ -511,7 +516,7 @@ export function useActiveOutages(): Incident[] {
       fetch('/api/sre/outages')
         .then(r => r.ok ? r.json() : [])
         .then((data: Incident[]) => {
-          const next = data.filter(i => i.active);
+          const next = data.filter(i => i.active && !isOneShot(i.container));
           // Only update state if the set of active containers changed.
           setActive(prev => {
             const prevKeys = prev.map(i => i.container).sort().join(',');

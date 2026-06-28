@@ -12,6 +12,7 @@
 //!   GET    /api/metrics             → live per-service processing metrics
 //!   GET    /api/config               → runtime config & feature flags
 //!   POST   /api/simulation/push     → publish N synthetic events to Kafka
+//!   GET    /api/integration/status  → probe service reachability (PG, CH, Kafka)
 
 mod error;
 mod routes;
@@ -27,7 +28,7 @@ use axum::{
     Router,
 };
 use rdkafka::producer::FutureProducer;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{Any, AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 /// Shared application state injected into every handler via axum's `State` extractor.
@@ -43,11 +44,16 @@ pub struct AppState {
 }
 
 /// Build the axum router with CORS enabled. Attach `AppState` before serving.
-pub fn router(state: AppState) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+pub fn router(state: AppState, allowed_origins: Vec<axum::http::HeaderValue>) -> Router {
+    let cors = if allowed_origins.is_empty() {
+        tracing::warn!("ALLOWED_ORIGINS not set — CORS is permissive (all origins allowed)");
+        CorsLayer::permissive()
+    } else {
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(allowed_origins))
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
 
     Router::new()
         .route("/health", get(routes::health::health))
@@ -68,6 +74,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reports/export", get(routes::reports::export))
         .route("/api/metrics", get(routes::metrics::metrics))
         .route("/api/simulation/push", post(routes::simulation::push))
+        .route("/api/integration/status", get(routes::integration::status))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)

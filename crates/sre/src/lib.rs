@@ -125,6 +125,10 @@ async fn scan_once(
     cfg: &SreConfig,
     ch: &Client,
 ) {
+    // Probe LLM once per scan so the badge reflects real availability even when
+    // all containers are healthy and no analysis calls are made.
+    state.write().await.llm_available = llm.probe().await;
+
     let containers = match docker::list_containers(docker).await {
         Ok(v) => v,
         Err(e) => {

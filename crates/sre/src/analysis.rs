@@ -282,6 +282,24 @@ impl AnalysisClient {
             .ok()
     }
 
+    /// Lightweight reachability check — returns true if the LLM responds to a
+    /// minimal completion request, false on any error or non-2xx status.
+    pub async fn probe(&self) -> bool {
+        let body = serde_json::json!({
+            "model": self.model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1
+        });
+        let mut req = self
+            .http
+            .post(format!("{}/v1/chat/completions", self.base_url))
+            .json(&body);
+        if let Some(key) = &self.api_key {
+            req = req.bearer_auth(key);
+        }
+        matches!(req.send().await, Ok(r) if r.status().is_success())
+    }
+
     /// Send a raw prompt and return the raw LLM text response.
     pub async fn raw_complete(&self, prompt: &str) -> anyhow::Result<String> {
         #[derive(serde::Serialize)]

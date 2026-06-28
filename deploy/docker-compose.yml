@@ -1,5 +1,10 @@
 name: rre   # container names: rre-<service>[-N]
 
+x-llm-env: &llm-env
+  LLM_BASE_URL: http://host.docker.internal:8888
+  LLM_MODEL: ${LLM_MODEL:-unsloth/GLM-4.7-Flash-GGUF}
+  LLM_API_KEY: ${UNSLOTH_API_KEY:-}
+
 services:
 
   # ── Redpanda — 3-node cluster, RF=2 ─────────────────────────────────────────
@@ -224,6 +229,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.app
     environment:
+      <<: *llm-env
       DATABASE_URL: postgres://rules:rules@postgres:${POSTGRES_PORT:-5432}/ruleaudit
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_DB: ruleaudit
@@ -277,13 +283,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      <<: *llm-env
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_DB: ruleaudit
       CLICKHOUSE_USER: rules
       CLICKHOUSE_PASSWORD: rules
-      LLM_BASE_URL: http://host.docker.internal:8888
-      LLM_MODEL: ${LLM_MODEL:-unsloth/GLM-4.7-Flash-GGUF}
-      LLM_API_KEY: ${UNSLOTH_API_KEY:-}
       SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-5}
       LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
       AUTO_RESTART: ${AUTO_RESTART:-false}

@@ -23,11 +23,9 @@ python3 - <<'PY'
 import json, os, re, sys, datetime, urllib.request, urllib.error
 
 SYSTEM = (
-    "You are an expert software engineer. "
-    "Output ONLY a single fenced code block. "
-    "The very first token of your response must be a backtick (```). "
-    "No analysis, no explanation, no prose before or after the block. "
-    "No TODOs, no placeholders. Complete, compilable code only."
+    "You are an expert software engineer. Produce complete, compilable code with "
+    "no placeholders or TODOs. Reply with exactly one fenced code block containing "
+    "the full file and nothing outside it."
 )
 body = json.dumps({
     "model": os.environ["MODEL"],

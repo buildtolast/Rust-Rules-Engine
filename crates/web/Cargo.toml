@@ -30,3 +30,4 @@ bytes             = "1"
 [dev-dependencies]
 http-body-util    = "0.1"
 tower-service     = "0.3"
+test-support = { path = "../test-support" }

@@ -21,6 +21,7 @@ mod tests {
     };
     use http_body_util::BodyExt;
     use tower_service::Service;
+    use test_support;
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -171,18 +172,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_rules_list_returns_200_with_array() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
         let response = call(
-            crate::router(state),
+            crate::router(state, vec![]),
             Request::builder()
                 .uri("/api/rules")
                 .body(Body::empty())
@@ -198,17 +197,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_create_rule_returns_201_and_retrieve_returns_200() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
-        let app = crate::router(state);
+        let app = crate::router(state, vec![]);
 
         // POST /api/rules
         let body = serde_json::json!({
@@ -256,18 +253,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_get_nonexistent_rule_returns_404() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
         let response = call(
-            crate::router(state),
+            crate::router(state, vec![]),
             Request::builder()
                 .uri("/api/rules/00000000-0000-0000-0000-000000000000")
                 .body(Body::empty())
@@ -280,18 +275,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_analytics_stats_returns_200_with_object_body() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
         let response = call(
-            crate::router(state),
+            crate::router(state, vec![]),
             Request::builder()
                 .uri("/api/analytics/stats")
                 .body(Body::empty())
@@ -310,18 +303,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_readiness_probe_returns_valid_shape() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
         let response = call(
-            crate::router(state),
+            crate::router(state, vec![]),
             Request::builder()
                 .uri("/health/ready")
                 .body(Body::empty())
@@ -349,18 +340,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_export_rejects_unknown_audit_type() {
-        if !integration_enabled() {
+        test_support::skip_if_unavailable!(
+            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            "full stack (Postgres + ClickHouse + Kafka)"
+        );
+        let Some(state) = try_build_app_state().await else {
+            eprintln!("skipping: could not build AppState (check DATABASE_URL)");
             return;
-        }
-        let state = match try_build_app_state().await {
-            Some(s) => s,
-            None => {
-                eprintln!("skipping: could not build AppState (check DATABASE_URL)");
-                return;
-            }
         };
         let response = call(
-            crate::router(state),
+            crate::router(state, vec![]),
             Request::builder()
                 .uri("/api/reports/export?type=BOGUS")
                 .body(Body::empty())

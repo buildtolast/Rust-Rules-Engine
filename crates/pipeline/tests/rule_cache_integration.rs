@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use pipeline::{watch_and_reload, RuleCache};
+use test_support;
 use store_postgres::{
     connect, run_migrations, seed_default_rules, RuleChangeListener, RuleInput, RuleRepository,
 };
@@ -13,6 +14,7 @@ const DSN: &str = "postgres://rules:rules@localhost:5432/ruleaudit";
 #[tokio::test]
 #[ignore = "requires live Postgres (deploy/run.sh)"]
 async fn load_returns_only_enabled_rules() {
+    test_support::skip_if_unavailable!(test_support::probe_postgres(), "Postgres at localhost:5432");
     let pool = connect(DSN).await.expect("connect");
     run_migrations(&pool).await.expect("migrations");
     let _: sqlx::postgres::PgQueryResult = sqlx::query("TRUNCATE rules")
@@ -56,6 +58,7 @@ async fn load_returns_only_enabled_rules() {
 #[tokio::test]
 #[ignore = "requires live Postgres (deploy/run.sh)"]
 async fn hot_reload_swaps_on_notify() {
+    test_support::skip_if_unavailable!(test_support::probe_postgres(), "Postgres at localhost:5432");
     let pool = connect(DSN).await.expect("connect");
     run_migrations(&pool).await.expect("migrations");
     let _: sqlx::postgres::PgQueryResult = sqlx::query("TRUNCATE rules")
@@ -118,6 +121,7 @@ async fn hot_reload_swaps_on_notify() {
 #[tokio::test]
 #[ignore = "requires live Postgres (deploy/run.sh)"]
 async fn bad_rule_expression_is_skipped_not_fatal() {
+    test_support::skip_if_unavailable!(test_support::probe_postgres(), "Postgres at localhost:5432");
     let pool = connect(DSN).await.expect("connect");
     run_migrations(&pool).await.expect("migrations");
     let _: sqlx::postgres::PgQueryResult = sqlx::query("TRUNCATE rules")

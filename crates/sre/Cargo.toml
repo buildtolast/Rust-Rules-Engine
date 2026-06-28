@@ -25,3 +25,4 @@ anyhow         = "1"
 
 [dev-dependencies]
 tokio = { workspace = true }
+test-support = { path = "../test-support" }

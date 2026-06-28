@@ -25,13 +25,6 @@ mod tests {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    /// Returns true when the `INTEGRATION` env var is set to a non-empty value.
-    fn integration_enabled() -> bool {
-        std::env::var("INTEGRATION")
-            .map(|v| !v.is_empty())
-            .unwrap_or(false)
-    }
-
     /// Read the full body of an axum `Response<Body>` into a `Vec<u8>`.
     async fn collect_body(body: Body) -> Vec<u8> {
         body.collect().await.expect("collect body").to_bytes().to_vec()

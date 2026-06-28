@@ -65,6 +65,9 @@ pub async fn status() -> Json<IntegrationStatus> {
     })
 }
 
+/// Dev-only endpoint. Spawns `cargo test --workspace --include-ignored` and streams
+/// output as SSE. Requires `ENABLE_TEST_RUNNER=1` — returns 403 otherwise.
+/// NEVER expose this endpoint in production: it is unauthenticated remote code execution.
 pub async fn run() -> Response {
     if std::env::var("ENABLE_TEST_RUNNER").unwrap_or_default().is_empty() {
         return (

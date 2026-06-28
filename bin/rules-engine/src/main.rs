@@ -33,6 +33,18 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(8080);
 
+    // ── CORS allowed origins ──────────────────────────────────────────────────
+    let allowed_origins: Vec<axum::http::HeaderValue> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if allowed_origins.is_empty() {
+        tracing::warn!("ALLOWED_ORIGINS not set — CORS is permissive (all origins allowed)");
+    }
+
     // ── Store connections ─────────────────────────────────────────────────────
     tracing::info!("connecting to postgres");
     let pool = store_postgres::connect(&pg_url)
@@ -68,11 +80,31 @@ async fn main() -> anyhow::Result<()> {
     let listener = store_postgres::RuleChangeListener::connect(&pool)
         .await
         .context("pg listener")?;
+    let pool_bg = pool.clone();
     let cache_bg = cache.clone();
     let repo_bg = repo.clone();
     tokio::spawn(async move {
-        if let Err(e) = pipeline::watch_and_reload(cache_bg, repo_bg, listener).await {
-            tracing::error!("hot-reload error: {e}");
+        let mut current_listener = listener;
+        let mut backoff = std::time::Duration::from_secs(1);
+        loop {
+            match pipeline::watch_and_reload(cache_bg.clone(), repo_bg.clone(), current_listener).await {
+                Ok(()) => break,
+                Err(e) => {
+                    tracing::error!("hot-reload error: {e} — reconnecting in {backoff:?}");
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
+                    match store_postgres::RuleChangeListener::connect(&pool_bg).await {
+                        Ok(new_listener) => {
+                            current_listener = new_listener;
+                            backoff = std::time::Duration::from_secs(1);
+                        }
+                        Err(re) => {
+                            tracing::error!("failed to reconnect pg listener: {re}");
+                            return;
+                        }
+                    }
+                }
+            }
         }
     });
 
@@ -96,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         counters: counters.clone(),
         rule_cache: cache.clone(),
     };
-    let app = web::router(state);
+    let app = web::router(state, allowed_origins);
     let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
     tracing::info!("HTTP API listening on {addr}");
 

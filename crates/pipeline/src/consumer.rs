@@ -52,6 +52,8 @@ pub enum PipelineError {
     ClickHouse(#[from] store_clickhouse::Error),
     #[error("join error: {0}")]
     Join(#[from] tokio::task::JoinError),
+    #[error("consumer group metadata unavailable")]
+    NoGroupMetadata,
 }
 
 /// Owned copy of a Kafka message — safe to hand to rayon across thread boundaries.
@@ -379,9 +381,11 @@ pub async fn run(
             let mut tpl = TopicPartitionList::new();
             for ((topic, partition), offset) in &last_offsets {
                 tpl.add_partition_offset(topic, *partition, Offset::Offset(offset + 1))
-                    .expect("add_partition_offset");
+                    .map_err(PipelineError::Kafka)?;
             }
-            let cgm = consumer.group_metadata().expect("group_metadata");
+            let cgm = consumer
+                .group_metadata()
+                .ok_or(PipelineError::NoGroupMetadata)?;
             producer.send_offsets_to_transaction(&tpl, &cgm, Duration::from_secs(10))?;
             producer.commit_transaction(Duration::from_secs(10))?;
 
@@ -465,12 +469,15 @@ fn consumer_all_partitions(consumer: &BaseConsumer, topic: &str) -> TopicPartiti
 /// TCP-connect check for Postgres: parse first host:port from DATABASE_URL.
 /// DATABASE_URL format: postgres://user:pass@host:port/db
 async fn check_postgres_tcp(database_url: &str) -> bool {
-    let host_port = database_url
+    let host_port = match database_url
         .split("://")
         .nth(1)
         .and_then(|rest| rest.split('@').nth(1))
         .and_then(|host_db| host_db.split('/').next())
-        .unwrap_or("localhost:5432");
+    {
+        Some(hp) => hp,
+        None => return false,
+    };
 
     let addrs: Vec<_> = match host_port.to_socket_addrs() {
         Ok(a) => a.collect(),

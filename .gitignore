@@ -5,3 +5,12 @@ deploy/.env
 
 # local-LLM loop usage log (local artifact)
 tools/llm-usage.log
+
+# Claude Code internals
+--prompt
+.claude/
+
+# Node
+node_modules/
+package.json
+package-lock.json

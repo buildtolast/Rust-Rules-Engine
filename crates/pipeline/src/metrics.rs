@@ -66,3 +66,77 @@ impl PipelineCounters {
         self.txn_ms_total.load(Relaxed) / batches
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering::Relaxed;
+
+    #[test]
+    fn new_starts_with_all_zeros() {
+        let c = PipelineCounters::new();
+        assert_eq!(c.messages_total.load(Relaxed), 0);
+        assert_eq!(c.batches_total.load(Relaxed), 0);
+        assert_eq!(c.eval_ms_total.load(Relaxed), 0);
+        assert_eq!(c.txn_ms_total.load(Relaxed), 0);
+        assert_eq!(c.consumer_lag.load(Relaxed), 0);
+        assert_eq!(c.ch_backlog_batches.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn record_batch_increments_messages_and_batches() {
+        let c = PipelineCounters::new();
+        c.record_batch(10, 5, 3, 0);
+        c.record_batch(20, 5, 3, 0);
+        assert_eq!(c.messages_total.load(Relaxed), 30);
+        assert_eq!(c.batches_total.load(Relaxed), 2);
+    }
+
+    #[test]
+    fn avg_eval_ms_zero_when_no_batches() {
+        assert_eq!(PipelineCounters::new().avg_eval_ms(), 0);
+    }
+
+    #[test]
+    fn avg_txn_ms_zero_when_no_batches() {
+        assert_eq!(PipelineCounters::new().avg_txn_ms(), 0);
+    }
+
+    #[test]
+    fn avg_eval_ms_correct_after_multiple_batches() {
+        let c = PipelineCounters::new();
+        c.record_batch(1, 10, 0, 0);
+        c.record_batch(1, 20, 0, 0);
+        c.record_batch(1, 30, 0, 0);
+        assert_eq!(c.avg_eval_ms(), 20);
+    }
+
+    #[test]
+    fn avg_txn_ms_correct_after_multiple_batches() {
+        let c = PipelineCounters::new();
+        c.record_batch(1, 0, 6, 0);
+        c.record_batch(1, 0, 12, 0);
+        assert_eq!(c.avg_txn_ms(), 9);
+    }
+
+    #[test]
+    fn consumer_lag_stores_latest_not_accumulated() {
+        let c = PipelineCounters::new();
+        c.record_batch(1, 0, 0, 100);
+        c.record_batch(1, 0, 0, 42);
+        assert_eq!(c.consumer_lag.load(Relaxed), 42);
+    }
+
+    #[test]
+    fn default_same_as_new() {
+        let d = PipelineCounters::default();
+        assert_eq!(d.messages_total.load(Relaxed), 0);
+        assert_eq!(d.batches_total.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn messages_per_sec_near_zero_immediately_after_creation() {
+        // elapsed < 1s so returns 0.0 regardless of message count
+        assert_eq!(PipelineCounters::new().messages_per_sec(), 0.0);
+    }
+}

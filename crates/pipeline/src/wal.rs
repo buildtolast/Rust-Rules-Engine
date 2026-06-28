@@ -174,3 +174,106 @@ async fn write_with_backoff(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use rules_core::{AuditRecord, AuditType};
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn make_record(id: &str) -> AuditRecord {
+        AuditRecord {
+            audit_id: id.to_owned(),
+            rule_id: "r1".to_owned(),
+            schema_version: 1,
+            audit_type: AuditType::Matched,
+            reason: None,
+            source_event: "{}".to_owned(),
+            routed_event: None,
+            source_topic: "src".to_owned(),
+            partition: 0,
+            offset: 0,
+            timestamp: Utc::now(),
+            parse_time_nano: 0,
+            eval_time_nano: 0,
+            total_time_nano: 0,
+        }
+    }
+
+    fn tmp_path(suffix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("wal-test-{}-{}", std::process::id(), suffix))
+    }
+
+    fn open_rw(path: &PathBuf) -> std::fs::File {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(path)
+            .unwrap()
+    }
+
+    #[test]
+    fn append_and_read_single_batch() {
+        let path = tmp_path("single");
+        let records = vec![make_record("a1"), make_record("a2")];
+        let mut file = open_rw(&path);
+        append_batch(&mut file, &records);
+        let batches = read_batches(&mut file);
+        fs::remove_file(&path).ok();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), 2);
+        assert_eq!(batches[0][0].audit_id, "a1");
+        assert_eq!(batches[0][1].audit_id, "a2");
+    }
+
+    #[test]
+    fn read_incomplete_batch_dropped() {
+        let path = tmp_path("incomplete");
+        let mut file = open_rw(&path);
+        use std::io::Write;
+        let line = serde_json::to_string(&make_record("b1")).unwrap();
+        writeln!(file, "{}", line).unwrap();
+        let batches = read_batches(&mut file);
+        fs::remove_file(&path).ok();
+        assert!(batches.is_empty());
+    }
+
+    #[test]
+    fn truncate_empties_file() {
+        let path = tmp_path("truncate");
+        let mut file = open_rw(&path);
+        append_batch(&mut file, &[make_record("c1")]);
+        truncate_wal(&mut file);
+        let batches = read_batches(&mut file);
+        fs::remove_file(&path).ok();
+        assert!(batches.is_empty());
+    }
+
+    #[test]
+    fn multiple_complete_batches_all_read() {
+        let path = tmp_path("multi");
+        let mut file = open_rw(&path);
+        append_batch(&mut file, &[make_record("d1"), make_record("d2")]);
+        append_batch(&mut file, &[make_record("d3")]);
+        let batches = read_batches(&mut file);
+        fs::remove_file(&path).ok();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].len(), 2);
+        assert_eq!(batches[1].len(), 1);
+        assert_eq!(batches[1][0].audit_id, "d3");
+    }
+
+    #[test]
+    fn open_wal_creates_file() {
+        let path = tmp_path("open");
+        fs::remove_file(&path).ok();
+        let result = open_wal(&path);
+        let exists = path.exists();
+        fs::remove_file(&path).ok();
+        assert!(result.is_some());
+        assert!(exists);
+    }
+}

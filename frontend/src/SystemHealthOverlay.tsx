@@ -65,6 +65,8 @@ function ServiceRow({ name, svc }: { name: string; svc: ServiceStatus }) {
   );
 }
 
+const KNOWN_SERVICES = ['postgres', 'clickhouse', 'kafka', 'app'] as const;
+
 function BlockingOverlay({
   data,
   fetchError,
@@ -74,56 +76,71 @@ function BlockingOverlay({
   fetchError: boolean;
   lastChecked: Date | null;
 }) {
-  const services = data ? Object.entries(data.services) : [];
+  const services: [string, ServiceStatus][] = data
+    ? Object.entries(data.services)
+    : KNOWN_SERVICES.map((name) => [
+        name,
+        { ok: false, latency_ms: 0, error: 'unreachable' },
+      ]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-gray-950/95 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="bg-gray-900 border border-red-800/60 rounded-2xl shadow-2xl w-full max-w-lg p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-          <h2 className="text-2xl font-black text-red-400 tracking-tight">
+      <div className="bg-gray-900 border border-red-800/40 rounded-2xl shadow-2xl w-full max-w-lg p-8">
+
+        {/* App identity */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
+            </svg>
+          </div>
+          <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            Rules Engine Dashboard
+          </span>
+        </div>
+
+        {/* Status heading */}
+        <div className="flex items-center gap-2.5 mb-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+          <h2 className="text-xl font-bold text-red-400 tracking-tight">
             System Unavailable
           </h2>
         </div>
 
-        {fetchError ? (
-          <p className="text-gray-400 text-sm mb-6">
-            Cannot reach SRE agent. Check network connectivity.
-          </p>
-        ) : (
-          <>
-            <p className="text-gray-400 text-sm mb-6">
-              One or more critical services are unreachable. The system will
-              resume automatically when all services recover.
+        <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+          {fetchError
+            ? 'Cannot reach the backend. The system will reconnect automatically.'
+            : 'One or more critical services are unreachable. The dashboard will resume once all services recover.'}
+        </p>
+
+        {/* Service list — always shown */}
+        <div className="bg-gray-800/70 rounded-xl px-4 py-1 mb-6">
+          {services.map(([name, svc]) => (
+            <ServiceRow key={name} name={name} svc={svc} />
+          ))}
+        </div>
+
+        {/* Bottleneck — only when backend has data */}
+        {data?.backlog?.weakest_link && (
+          <div className="bg-red-950/50 border border-red-800/40 rounded-xl p-4 mb-6">
+            <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">
+              Bottleneck
             </p>
-
-            <div className="bg-gray-800 rounded-xl px-4 py-3 mb-6">
-              {services.map(([name, svc]) => (
-                <ServiceRow key={name} name={name} svc={svc} />
-              ))}
-            </div>
-
-            {data?.backlog?.weakest_link && (
-              <div className="bg-red-950/50 border border-red-800/40 rounded-xl p-4 mb-6">
-                <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">
-                  Bottleneck
-                </p>
-                <p className="text-sm font-semibold text-gray-200 mb-1">
-                  {SERVICE_LABELS[data.backlog.weakest_link] ?? data.backlog.weakest_link}
-                </p>
-                {data.backlog.weakest_link_reasoning && (
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    {data.backlog.weakest_link_reasoning}
-                  </p>
-                )}
-              </div>
+            <p className="text-sm font-semibold text-gray-200 mb-1">
+              {SERVICE_LABELS[data.backlog.weakest_link] ?? data.backlog.weakest_link}
+            </p>
+            {data.backlog.weakest_link_reasoning && (
+              <p className="text-xs text-gray-400 leading-relaxed">
+                {data.backlog.weakest_link_reasoning}
+              </p>
             )}
-          </>
+          </div>
         )}
 
         {lastChecked && (
           <p className="text-xs text-gray-600 text-right">
-            Last checked {lastChecked.toLocaleTimeString([], {
+            Last checked{' '}
+            {lastChecked.toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
               second: '2-digit',

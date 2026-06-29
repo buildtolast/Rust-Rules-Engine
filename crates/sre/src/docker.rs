@@ -1,4 +1,4 @@
-use bollard::container::{ListContainersOptions, LogOutput, LogsOptions};
+use bollard::container::{ListContainersOptions, LogOutput, LogsOptions, StatsOptions};
 use bollard::models::{Health, HealthStatusEnum};
 use bollard::Docker;
 use futures_util::stream::StreamExt;
@@ -87,6 +87,41 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
         });
     }
     Ok(result)
+}
+
+/// Returns `(cpu_percent, mem_used_bytes, mem_limit_bytes)` for a running container.
+/// Uses `one_shot=true` so the API returns immediately with a single sample.
+/// Returns `None` for stopped containers or on any API error.
+pub async fn fetch_stats(docker: &Docker, id: &str) -> Option<(f64, u64, u64)> {
+    let opts = StatsOptions { stream: false, one_shot: true };
+    let stats = docker
+        .stats(id, Some(opts))
+        .next()
+        .await?
+        .ok()?;
+
+    let cpu_delta = stats
+        .cpu_stats
+        .cpu_usage
+        .total_usage
+        .saturating_sub(stats.precpu_stats.cpu_usage.total_usage);
+    let system_delta = stats
+        .cpu_stats
+        .system_cpu_usage
+        .unwrap_or(0)
+        .saturating_sub(stats.precpu_stats.system_cpu_usage.unwrap_or(0));
+    let num_cpus = stats.cpu_stats.online_cpus.unwrap_or(1) as f64;
+
+    let cpu_pct = if system_delta > 0 {
+        (cpu_delta as f64 / system_delta as f64) * num_cpus * 100.0
+    } else {
+        0.0
+    };
+
+    let mem_used = stats.memory_stats.usage.unwrap_or(0);
+    let mem_limit = stats.memory_stats.limit.unwrap_or(0);
+
+    Some((cpu_pct, mem_used, mem_limit))
 }
 
 pub async fn restart_container(docker: &Docker, id: &str) -> Result<(), DockerError> {

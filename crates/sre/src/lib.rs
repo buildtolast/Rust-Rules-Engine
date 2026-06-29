@@ -48,6 +48,9 @@ pub struct ContainerStatus {
     pub health: docker::HealthSummary,
     pub last_checked_at: DateTime<Utc>,
     pub last_severity: Option<String>,
+    pub cpu_percent: f64,
+    pub mem_used_bytes: u64,
+    pub mem_limit_bytes: u64,
 }
 
 #[derive(serde::Serialize)]
@@ -139,11 +142,14 @@ async fn scan_once(
 
     // Update container statuses in shared state, excluding one-time init/patch/migration jobs.
     {
-        let mut st = state.write().await;
-        st.containers = containers
-            .iter()
-            .filter(|c| !is_one_shot_by_name(&c.name))
-            .map(|c| ContainerStatus {
+        let mut statuses = Vec::new();
+        for c in containers.iter().filter(|c| !is_one_shot_by_name(&c.name)) {
+            let (cpu_percent, mem_used_bytes, mem_limit_bytes) = if c.running {
+                docker::fetch_stats(docker, &c.id).await.unwrap_or((0.0, 0, 0))
+            } else {
+                (0.0, 0, 0)
+            };
+            statuses.push(ContainerStatus {
                 name: c.name.clone(),
                 id: c.id.clone(),
                 running: c.running,
@@ -151,8 +157,13 @@ async fn scan_once(
                 health: c.health.clone(),
                 last_checked_at: Utc::now(),
                 last_severity: None,
-            })
-            .collect();
+                cpu_percent,
+                mem_used_bytes,
+                mem_limit_bytes,
+            });
+        }
+        let mut st = state.write().await;
+        st.containers = statuses;
         st.last_scan_at = Some(Utc::now());
     }
 

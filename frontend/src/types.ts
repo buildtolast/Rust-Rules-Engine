@@ -50,6 +50,9 @@ export interface SreContainerStatus {
   health: { status: string };
   last_checked_at: string;
   last_severity: string | null;
+  cpu_percent: number;
+  mem_used_bytes: number;
+  mem_limit_bytes: number;
 }
 
 export interface SreStatus {

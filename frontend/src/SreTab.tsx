@@ -36,10 +36,32 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
+function UsageBar({ pct, label, detail }: { pct: number; label: string; detail: string }) {
+  const color = pct >= 80 ? 'bg-red-500' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-500';
+  return (
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-gray-500 font-medium">{detail}</span>
+      </div>
+      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100).toFixed(1)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function fmtBytes(bytes: number): string {
+  if (bytes === 0) return '—';
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  return `${(bytes / 1048576).toFixed(0)} MB`;
+}
+
 function ContainerCard({ c }: { c: SreContainerStatus }) {
   const sev = c.last_severity ?? 'INFO';
   const { badge } = severityStyle(sev);
   const healthStatus = c.health?.status ?? 'none';
+  const memPct = c.mem_limit_bytes > 0 ? (c.mem_used_bytes / c.mem_limit_bytes) * 100 : 0;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
@@ -63,6 +85,16 @@ function ContainerCard({ c }: { c: SreContainerStatus }) {
           {healthStatus === 'none' ? 'no healthcheck' : healthStatus}
         </span>
       </div>
+      {c.running && (
+        <div className="flex flex-col gap-2">
+          <UsageBar pct={c.cpu_percent} label="CPU" detail={`${c.cpu_percent.toFixed(1)}%`} />
+          <UsageBar
+            pct={memPct}
+            label="Memory"
+            detail={`${fmtBytes(c.mem_used_bytes)} / ${fmtBytes(c.mem_limit_bytes)}`}
+          />
+        </div>
+      )}
       <div className="text-xs text-gray-400 flex items-center gap-1">
         <Clock size={11} />
         {relativeTime(c.last_checked_at)}

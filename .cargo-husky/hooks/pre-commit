@@ -9,8 +9,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # ── Rust ─────────────────────────────────────────────────────────────────────
 echo "==> [rust] cargo fmt (nightly rustfmt)"
-NIGHTLY_BIN="$(dirname "$(rustup which --toolchain nightly rustfmt)")"
-PATH="$NIGHTLY_BIN:$PATH" cargo fmt --all
+NIGHTLY_RUSTFMT="$(rustup which --toolchain nightly rustfmt)"
+find . -name "*.rs" ! -path "*/target/*" -print0 | xargs -0 "$NIGHTLY_RUSTFMT" --edition 2021
 git add -u
 
 echo "==> [rust] cargo clippy"

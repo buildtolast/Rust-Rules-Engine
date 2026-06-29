@@ -176,6 +176,49 @@ async fn scan_once(
         st.last_probe = Some(probe_result.clone());
     }
 
+    // Emit metric-driven findings for memory pressure — no LLM needed.
+    {
+        let snapshot = state.read().await.containers.clone();
+        for cs in &snapshot {
+            if cs.mem_limit_bytes == 0 {
+                continue;
+            }
+            let pct = cs.mem_used_bytes as f64 / cs.mem_limit_bytes as f64 * 100.0;
+            if pct < 60.0 {
+                continue;
+            }
+            let severity = if pct >= 80.0 { "CRITICAL" } else { "WARN" };
+            let used_mb = cs.mem_used_bytes / 1_048_576;
+            let limit_mb = cs.mem_limit_bytes / 1_048_576;
+            let suggested_mb = (cs.mem_used_bytes as f64 / 0.4) as u64 / 1_048_576;
+            let finding = analysis::Finding {
+                severity: severity.to_string(),
+                category: "resource_pressure".to_string(),
+                finding: format!(
+                    "Memory usage is {:.1}% ({} MB / {} MB) — above the 60% advisory threshold.",
+                    pct, used_mb, limit_mb
+                ),
+                proposed_fix: format!(
+                    "Increase the memory limit for {} to ~{} MB so current usage stays below 40%. \
+                     Update the relevant *_MEM_LIMIT env var in docker-compose.yml and run \
+                     `docker compose up -d --no-deps {}`.",
+                    cs.name, suggested_mb, cs.name.trim_start_matches("rre-")
+                ),
+                container_name: cs.name.clone(),
+                observed_at: Some(Utc::now()),
+            };
+            let hash = sha256_hex(&format!("{}:mem:{:.0}", cs.name, pct / 5.0 * 5.0));
+            if !store.is_unchanged(&cs.name, &hash) {
+                store.record_hash(&cs.name, &hash);
+                store.record_severity(&cs.name, severity);
+                let _ = tx.send(finding.clone());
+                let mut st = state.write().await;
+                st.findings.push_front(finding);
+                st.findings.truncate(200);
+            }
+        }
+    }
+
     // Analyze containers, skipping one-time init/patch/migration jobs.
     for c in &containers {
         if is_one_shot_by_name(&c.name) {

@@ -42,7 +42,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+          memory: ${REDPANDA_MEM_LIMIT:-2500M}
 
   redpanda-1:
     image: redpandadata/redpanda:v24.2.7
@@ -71,7 +71,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+          memory: ${REDPANDA_MEM_LIMIT:-2500M}
 
   redpanda-2:
     image: redpandadata/redpanda:v24.2.7
@@ -100,7 +100,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${REDPANDA_MEM_LIMIT:-1200M}
+          memory: ${REDPANDA_MEM_LIMIT:-2500M}
 
   # One-shot: creates topics with RF=2 once all brokers are healthy.
   redpanda-init:

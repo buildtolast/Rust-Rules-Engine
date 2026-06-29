@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { 
-  Activity, 
-  BarChart3, 
-  RefreshCw, 
+import React, { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import {
+  Activity,
+  BarChart3,
+  RefreshCw,
   AlertCircle,
   TrendingUp,
   Hash,
@@ -11,9 +11,9 @@ import {
   Table as TableIcon,
   LineChart as LineChartIcon,
   ArrowUp,
-  ArrowDown
-} from 'lucide-react';
-import type { AnalyticsStats, TimeSeriesPoint, Rule } from './types';
+  ArrowDown,
+} from "lucide-react";
+import type { AnalyticsStats, TimeSeriesPoint, Rule } from "./types";
 
 interface Props {
   rules: Rule[];
@@ -23,23 +23,25 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<string>('24h');
-  const [subTab, setSubTab] = useState<'table' | 'graph'>('table');
+  const [range, setRange] = useState<string>("24h");
+  const [subTab, setSubTab] = useState<"table" | "graph">("table");
   const [sortConfig, setSortConfig] = useState<{
-    key: 'matched' | 'unmatched' | 'total';
-    direction: 'asc' | 'desc';
-  }>({ key: 'matched', direction: 'desc' });
-  const [selectedRule, setSelectedRule] = useState<string>('all');
+    key: "matched" | "unmatched" | "total";
+    direction: "asc" | "desc";
+  }>({ key: "matched", direction: "desc" });
+  const [selectedRule, setSelectedRule] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
 
   const ruleNameMap = React.useMemo(() => {
     const map: Record<string, string> = {};
-    rules.forEach(r => { if (r.id) map[r.id] = r.description; });
+    rules.forEach((r) => {
+      if (r.id) map[r.id] = r.description;
+    });
     return map;
   }, [rules]);
 
-  const ruleName = (id: string) => ruleNameMap[id] ?? id.slice(0, 8) + '…';
+  const ruleName = (id: string) => ruleNameMap[id] ?? id.slice(0, 8) + "…";
 
   const inFlightRef = useRef(false);
 
@@ -52,17 +54,18 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
     try {
       let from: string | null = null;
       const now = new Date();
-      if (range === '1h') from = new Date(now.getTime() - 3600000).toISOString();
-      else if (range === '6h') from = new Date(now.getTime() - 6 * 3600000).toISOString();
-      else if (range === '24h') from = new Date(now.getTime() - 24 * 3600000).toISOString();
-      
-      const response = await axios.get<AnalyticsStats>('/api/analytics/stats', {
-        params: { from }
+      if (range === "1h") from = new Date(now.getTime() - 3600000).toISOString();
+      else if (range === "6h") from = new Date(now.getTime() - 6 * 3600000).toISOString();
+      else if (range === "24h") from = new Date(now.getTime() - 24 * 3600000).toISOString();
+
+      const response = await axios.get<AnalyticsStats>("/api/analytics/stats", {
+        params: { from },
       });
       setStats(response.data);
       setError(null);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Unknown error';
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg = axiosErr.response?.data?.message || axiosErr.message || "Unknown error";
       setError(`Failed to fetch analytics: ${msg}`);
       console.error(err);
     } finally {
@@ -72,35 +75,37 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
     fetchStats();
     const interval = setInterval(fetchStats, 30000); // Auto refresh every 30s
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   const sortedRuleStats = React.useMemo(() => {
     if (!stats) return [];
-    
+
     const sorted = [...stats.ruleStats];
     sorted.sort((a, b) => {
       const aTotal = a.matched + a.unmatched;
       const bTotal = b.matched + b.unmatched;
-      
+
       let aVal = 0;
       let bVal = 0;
-      
-      if (sortConfig.key === 'total') {
+
+      if (sortConfig.key === "total") {
         aVal = aTotal;
         bVal = bTotal;
-      } else if (sortConfig.key === 'matched') {
+      } else if (sortConfig.key === "matched") {
         aVal = a.matched;
         bVal = b.matched;
-      } else if (sortConfig.key === 'unmatched') {
+      } else if (sortConfig.key === "unmatched") {
         aVal = a.unmatched;
         bVal = b.unmatched;
       }
-      
-      if (sortConfig.direction === 'asc') {
+
+      if (sortConfig.direction === "asc") {
         return aVal - bVal;
       } else {
         return bVal - aVal;
@@ -114,10 +119,10 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
   const safePage = Math.min(currentPage, totalPages);
   const pagedRuleStats = sortedRuleStats.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const requestSort = (key: 'matched' | 'unmatched' | 'total') => {
-    let direction: 'asc' | 'desc' = 'desc';
-    if (sortConfig.key === key && sortConfig.direction === 'desc') {
-      direction = 'asc';
+  const requestSort = (key: "matched" | "unmatched" | "total") => {
+    let direction: "asc" | "desc" = "desc";
+    if (sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "asc";
     }
     setSortConfig({ key, direction });
     setCurrentPage(1);
@@ -143,24 +148,24 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
           </h2>
           <p className="text-gray-500">Real-time evaluation metrics and rule performance.</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="bg-white p-1 rounded-2xl border border-gray-200 flex shadow-sm">
-            {(['1h', '6h', '24h'] as const).map((r) => (
-              <button 
+            {(["1h", "6h", "24h"] as const).map((r) => (
+              <button
                 key={r}
                 onClick={() => setRange(r)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${range === r ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${range === r ? "bg-indigo-600 text-white shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
               >
                 Last {r}
               </button>
             ))}
           </div>
-          <button 
+          <button
             onClick={fetchStats}
             className="p-2.5 text-gray-500 hover:text-indigo-600 hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 rounded-xl transition-all"
           >
-            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
@@ -174,25 +179,25 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
 
       {/* High-level Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
+        <StatCard
           icon={<Activity className="text-blue-600" size={24} />}
           label="Processed Messages"
           value={stats?.totalMessages || 0}
           bgColor="bg-blue-50"
         />
-        <StatCard 
+        <StatCard
           icon={<Hash className="text-purple-600" size={24} />}
           label="Total Evaluations"
           value={stats?.totalEvaluations || 0}
           bgColor="bg-purple-50"
         />
-        <StatCard 
+        <StatCard
           icon={<CheckCircle2 className="text-emerald-600" size={24} />}
           label="Matches"
           value={(stats?.ruleStats || []).reduce((acc, curr) => acc + curr.matched, 0)}
           bgColor="bg-emerald-50"
         />
-        <StatCard 
+        <StatCard
           icon={<AlertCircle className="text-red-600" size={24} />}
           label="Errors"
           value={(stats?.ruleStats || []).reduce((acc, curr) => acc + curr.errored, 0)}
@@ -209,16 +214,16 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
           </h3>
 
           <div className="bg-gray-100 p-1 rounded-xl flex">
-            <button 
-              onClick={() => setSubTab('table')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${subTab === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            <button
+              onClick={() => setSubTab("table")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${subTab === "table" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
             >
               <TableIcon size={14} />
               Table
             </button>
-            <button 
-              onClick={() => setSubTab('graph')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${subTab === 'graph' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            <button
+              onClick={() => setSubTab("graph")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${subTab === "graph" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
             >
               <LineChartIcon size={14} />
               Timeseries
@@ -226,47 +231,62 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
           </div>
         </div>
 
-        {subTab === 'table' ? (
+        {subTab === "table" ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Rule Identifier</th>
-                  <th 
+                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Rule Identifier
+                  </th>
+                  <th
                     className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors"
-                    onClick={() => requestSort('total')}
+                    onClick={() => requestSort("total")}
                   >
                     <div className="flex items-center gap-1">
                       Total
-                      {sortConfig.key === 'total' && (
-                        sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      )}
+                      {sortConfig.key === "total" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ArrowUp size={12} />
+                        ) : (
+                          <ArrowDown size={12} />
+                        ))}
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors"
-                    onClick={() => requestSort('matched')}
+                    onClick={() => requestSort("matched")}
                   >
                     <div className="flex items-center gap-1">
                       Matched
-                      {sortConfig.key === 'matched' && (
-                        sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      )}
+                      {sortConfig.key === "matched" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ArrowUp size={12} />
+                        ) : (
+                          <ArrowDown size={12} />
+                        ))}
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors"
-                    onClick={() => requestSort('unmatched')}
+                    onClick={() => requestSort("unmatched")}
                   >
                     <div className="flex items-center gap-1">
                       Unmatched
-                      {sortConfig.key === 'unmatched' && (
-                        sortConfig.direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      )}
+                      {sortConfig.key === "unmatched" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ArrowUp size={12} />
+                        ) : (
+                          <ArrowDown size={12} />
+                        ))}
                     </div>
                   </th>
-                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Errored</th>
-                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Action</th>
+                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Errored
+                  </th>
+                  <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -279,22 +299,31 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
                 ) : (
                   pagedRuleStats.map((rs) => {
                     const total = rs.matched + rs.unmatched + rs.errored;
-                    const matchRate = total > 0 ? ((rs.matched / total) * 100).toFixed(1) : '0';
-                    
+                    const matchRate = total > 0 ? ((rs.matched / total) * 100).toFixed(1) : "0";
+
                     return (
-                      <tr key={rs.ruleId} className={`hover:bg-gray-50/50 transition-colors ${selectedRule === rs.ruleId ? 'bg-indigo-50/50' : ''}`}>
+                      <tr
+                        key={rs.ruleId}
+                        className={`hover:bg-gray-50/50 transition-colors ${selectedRule === rs.ruleId ? "bg-indigo-50/50" : ""}`}
+                      >
                         <td className="px-8 py-5 text-sm font-bold text-gray-700 max-w-[220px]">
-                          <span className="block truncate" title={rs.ruleId}>{ruleName(rs.ruleId)}</span>
+                          <span className="block truncate" title={rs.ruleId}>
+                            {ruleName(rs.ruleId)}
+                          </span>
                         </td>
                         <td className="px-8 py-5">
                           <div className="w-full bg-gray-100 rounded-full h-2.5 max-w-[120px]">
-                            <div 
-                              className="bg-indigo-600 h-2.5 rounded-full" 
+                            <div
+                              className="bg-indigo-600 h-2.5 rounded-full"
                               style={{ width: `${matchRate}%` }}
                             ></div>
                           </div>
-                          <span className="text-[10px] font-black text-indigo-600 mt-1 block uppercase tracking-tighter">{matchRate}% match rate</span>
-                          <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-tighter">({rs.matched + rs.unmatched} total)</span>
+                          <span className="text-[10px] font-black text-indigo-600 mt-1 block uppercase tracking-tighter">
+                            {matchRate}% match rate
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-tighter">
+                            ({rs.matched + rs.unmatched} total)
+                          </span>
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-emerald-600 font-black text-lg">{rs.matched}</span>
@@ -303,13 +332,17 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
                           <span className="text-gray-400 font-bold">{rs.unmatched}</span>
                         </td>
                         <td className="px-8 py-5">
-                          <span className={`font-bold ${rs.errored > 0 ? 'text-red-500' : 'text-gray-300'}`}>{rs.errored}</span>
+                          <span
+                            className={`font-bold ${rs.errored > 0 ? "text-red-500" : "text-gray-300"}`}
+                          >
+                            {rs.errored}
+                          </span>
                         </td>
                         <td className="px-8 py-5">
-                          <button 
+                          <button
                             onClick={() => {
                               setSelectedRule(rs.ruleId);
-                              setSubTab('graph');
+                              setSubTab("graph");
                             }}
                             className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
                           >
@@ -352,22 +385,21 @@ const AnalyticsDashboard: React.FC<Props> = ({ rules }) => {
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-bold text-gray-500 uppercase">Filter Rule:</span>
-                <select 
-                  value={selectedRule} 
+                <select
+                  value={selectedRule}
                   onChange={(e) => setSelectedRule(e.target.value)}
                   className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="all">All Rules (Aggregated)</option>
-                  {(stats?.ruleStats || []).map(rs => (
-                    <option key={rs.ruleId} value={rs.ruleId}>{ruleName(rs.ruleId)}</option>
+                  {(stats?.ruleStats || []).map((rs) => (
+                    <option key={rs.ruleId} value={rs.ruleId}>
+                      {ruleName(rs.ruleId)}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
-            <PerformanceChart 
-              data={stats?.timeSeries || []} 
-              selectedRule={selectedRule}
-            />
+            <PerformanceChart data={stats?.timeSeries || []} selectedRule={selectedRule} />
           </div>
         )}
       </div>
@@ -384,10 +416,13 @@ interface StatCardProps {
 
 const StatCard: React.FC<StatCardProps> = ({ icon, label, value, bgColor }) => {
   const formatted = value.toLocaleString();
-  const sizeClass = formatted.length > 11 ? 'text-xl' : formatted.length > 8 ? 'text-2xl' : 'text-3xl';
+  const sizeClass =
+    formatted.length > 11 ? "text-xl" : formatted.length > 8 ? "text-2xl" : "text-3xl";
   return (
     <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 min-w-0">
-      <div className={`w-14 h-14 flex-shrink-0 ${bgColor} rounded-2xl flex items-center justify-center shadow-inner`}>
+      <div
+        className={`w-14 h-14 flex-shrink-0 ${bgColor} rounded-2xl flex items-center justify-center shadow-inner`}
+      >
         {icon}
       </div>
       <div className="min-w-0">
@@ -408,34 +443,39 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
   const [visibleSeries, setVisibleSeries] = useState({
     matched: true,
     unmatched: false,
-    errored: false
+    errored: false,
   });
 
   const toggleSeries = (series: keyof typeof visibleSeries) => {
-    setVisibleSeries(prev => {
+    setVisibleSeries((prev) => {
       const next = { ...prev, [series]: !prev[series] };
-      // Ensure at least one is always selected, or allow none? 
+      // Ensure at least one is always selected, or allow none?
       // User said "matched vs unmatched or both", so maybe allow toggling freely.
       return next;
     });
   };
 
   const filteredData = React.useMemo(() => {
-    if (selectedRule === 'all') {
+    if (selectedRule === "all") {
       // Group by timestamp and sum values
-      const grouped = data.reduce((acc, curr) => {
-        const time = curr.timestamp;
-        if (!acc[time]) {
-          acc[time] = { ...curr, ruleId: 'all', matched: 0, unmatched: 0, errored: 0 };
-        }
-        acc[time].matched += curr.matched;
-        acc[time].unmatched += curr.unmatched;
-        acc[time].errored += curr.errored;
-        return acc;
-      }, {} as Record<string, TimeSeriesPoint>);
-      return Object.values(grouped).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const grouped = data.reduce(
+        (acc, curr) => {
+          const time = curr.timestamp;
+          if (!acc[time]) {
+            acc[time] = { ...curr, ruleId: "all", matched: 0, unmatched: 0, errored: 0 };
+          }
+          acc[time].matched += curr.matched;
+          acc[time].unmatched += curr.unmatched;
+          acc[time].errored += curr.errored;
+          return acc;
+        },
+        {} as Record<string, TimeSeriesPoint>
+      );
+      return Object.values(grouped).sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
     }
-    return data.filter(d => d.ruleId === selectedRule);
+    return data.filter((d) => d.ruleId === selectedRule);
   }, [data, selectedRule]);
 
   if (filteredData.length === 0) {
@@ -446,13 +486,16 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
     );
   }
 
-  const maxVal = Math.max(...filteredData.map(d => {
-    let sum = 0;
-    if (visibleSeries.matched) sum = Math.max(sum, d.matched);
-    if (visibleSeries.unmatched) sum = Math.max(sum, d.unmatched);
-    if (visibleSeries.errored) sum = Math.max(sum, d.errored);
-    return sum;
-  }), 1);
+  const maxVal = Math.max(
+    ...filteredData.map((d) => {
+      let sum = 0;
+      if (visibleSeries.matched) sum = Math.max(sum, d.matched);
+      if (visibleSeries.unmatched) sum = Math.max(sum, d.unmatched);
+      if (visibleSeries.errored) sum = Math.max(sum, d.errored);
+      return sum;
+    }),
+    1
+  );
   const width = 800;
   const height = 300;
   const padding = 40;
@@ -462,20 +505,26 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
     yMatched: height - padding - (d.matched * (height - 2 * padding)) / maxVal,
     yUnmatched: height - padding - (d.unmatched * (height - 2 * padding)) / maxVal,
     yErrored: height - padding - (d.errored * (height - 2 * padding)) / maxVal,
-    yVal: height - padding - ((visibleSeries.matched ? d.matched : (visibleSeries.unmatched ? d.unmatched : d.errored)) * (height - 2 * padding)) / maxVal,
-    date: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    yVal:
+      height -
+      padding -
+      ((visibleSeries.matched ? d.matched : visibleSeries.unmatched ? d.unmatched : d.errored) *
+        (height - 2 * padding)) /
+        maxVal,
+    date: new Date(d.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     fullDate: new Date(d.timestamp).toLocaleString(),
-    data: d
+    data: d,
   }));
 
-  const getPath = (key: 'yMatched' | 'yUnmatched' | 'yErrored') => {
+  const getPath = (key: "yMatched" | "yUnmatched" | "yErrored") => {
     if (points.length < 2) return "";
-    return points.reduce((acc, p, i) => 
-      acc + (i === 0 ? `M ${p.x} ${p[key]}` : ` L ${p.x} ${p[key]}`), 
-    "");
+    return points.reduce(
+      (acc, p, i) => acc + (i === 0 ? `M ${p.x} ${p[key]}` : ` L ${p.x} ${p[key]}`),
+      ""
+    );
   };
 
-  const getAreaPath = (key: 'yMatched' | 'yUnmatched' | 'yErrored') => {
+  const getAreaPath = (key: "yMatched" | "yUnmatched" | "yErrored") => {
     if (points.length < 2) return "";
     const path = getPath(key);
     return `${path} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
@@ -485,29 +534,31 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
     <div className="w-full">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
-           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Toggle Series:</span>
-           <div className="flex gap-2">
-             <button 
-               onClick={() => toggleSeries('matched')}
-               className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.matched ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'bg-white text-gray-400 border-gray-100'}`}
-             >
-               Matched
-             </button>
-             <button 
-               onClick={() => toggleSeries('unmatched')}
-               className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.unmatched ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm' : 'bg-white text-gray-400 border-gray-100'}`}
-             >
-               Unmatched
-             </button>
-             <button 
-               onClick={() => toggleSeries('errored')}
-               className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.errored ? 'bg-red-500 text-white border-red-500 shadow-sm' : 'bg-white text-gray-400 border-gray-100'}`}
-             >
-               Errored
-             </button>
-           </div>
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            Toggle Series:
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => toggleSeries("matched")}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.matched ? "bg-emerald-500 text-white border-emerald-500 shadow-sm" : "bg-white text-gray-400 border-gray-100"}`}
+            >
+              Matched
+            </button>
+            <button
+              onClick={() => toggleSeries("unmatched")}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.unmatched ? "bg-indigo-500 text-white border-indigo-500 shadow-sm" : "bg-white text-gray-400 border-gray-100"}`}
+            >
+              Unmatched
+            </button>
+            <button
+              onClick={() => toggleSeries("errored")}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${visibleSeries.errored ? "bg-red-500 text-white border-red-500 shadow-sm" : "bg-white text-gray-400 border-gray-100"}`}
+            >
+              Errored
+            </button>
+          </div>
         </div>
-        
+
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
@@ -523,16 +574,29 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
           </div>
         </div>
       </div>
-      
+
       <div className="relative">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
           {/* Grid Lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map(p => {
+          {[0, 0.25, 0.5, 0.75, 1].map((p) => {
             const y = height - padding - p * (height - 2 * padding);
             return (
               <g key={p}>
-                <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="#f1f5f9" strokeWidth="1" />
-                <text x={padding - 10} y={y} textAnchor="end" alignmentBaseline="middle" className="text-[10px] fill-gray-400 font-bold">
+                <line
+                  x1={padding}
+                  y1={y}
+                  x2={width - padding}
+                  y2={y}
+                  stroke="#f1f5f9"
+                  strokeWidth="1"
+                />
+                <text
+                  x={padding - 10}
+                  y={y}
+                  textAnchor="end"
+                  alignmentBaseline="middle"
+                  className="text-[10px] fill-gray-400 font-bold"
+                >
                   {Math.round(p * maxVal)}
                 </text>
               </g>
@@ -540,53 +604,118 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
           })}
 
           {/* Areas */}
-          {visibleSeries.unmatched && <path d={getAreaPath('yUnmatched')} className="fill-indigo-50 opacity-30 transition-all duration-500" />}
-          {visibleSeries.matched && <path d={getAreaPath('yMatched')} className="fill-emerald-50 opacity-30 transition-all duration-500" />}
+          {visibleSeries.unmatched && (
+            <path
+              d={getAreaPath("yUnmatched")}
+              className="fill-indigo-50 opacity-30 transition-all duration-500"
+            />
+          )}
+          {visibleSeries.matched && (
+            <path
+              d={getAreaPath("yMatched")}
+              className="fill-emerald-50 opacity-30 transition-all duration-500"
+            />
+          )}
 
           {/* Lines */}
-          {visibleSeries.unmatched && <path d={getPath('yUnmatched')} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-30 transition-all duration-500" />}
-          {visibleSeries.matched && <path d={getPath('yMatched')} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />}
-          {visibleSeries.errored && <path d={getPath('yErrored')} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" className="transition-all duration-500" />}
+          {visibleSeries.unmatched && (
+            <path
+              d={getPath("yUnmatched")}
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="opacity-30 transition-all duration-500"
+            />
+          )}
+          {visibleSeries.matched && (
+            <path
+              d={getPath("yMatched")}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-all duration-500"
+            />
+          )}
+          {visibleSeries.errored && (
+            <path
+              d={getPath("yErrored")}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="2"
+              strokeDasharray="4 4"
+              className="transition-all duration-500"
+            />
+          )}
 
           {/* Vertical Line on Hover */}
           {hoveredPoint !== null && (
-            <line 
-              x1={points[hoveredPoint].x} 
-              y1={padding} 
-              x2={points[hoveredPoint].x} 
-              y2={height - padding} 
-              stroke="#cbd5e1" 
-              strokeWidth="1" 
-              strokeDasharray="4 4" 
+            <line
+              x1={points[hoveredPoint].x}
+              y1={padding}
+              x2={points[hoveredPoint].x}
+              y2={height - padding}
+              stroke="#cbd5e1"
+              strokeWidth="1"
+              strokeDasharray="4 4"
             />
           )}
 
           {/* Interaction Circles */}
           {points.map((p, i) => (
-            <g key={i} onMouseEnter={() => setHoveredPoint(i)} onMouseLeave={() => setHoveredPoint(null)}>
+            <g
+              key={i}
+              onMouseEnter={() => setHoveredPoint(i)}
+              onMouseLeave={() => setHoveredPoint(null)}
+            >
               {visibleSeries.matched && (
-                <circle cx={p.x} cy={p.yMatched} r={hoveredPoint === i ? "6" : "4"} className="fill-emerald-500 stroke-white stroke-2 transition-all cursor-pointer" />
+                <circle
+                  cx={p.x}
+                  cy={p.yMatched}
+                  r={hoveredPoint === i ? "6" : "4"}
+                  className="fill-emerald-500 stroke-white stroke-2 transition-all cursor-pointer"
+                />
               )}
               {visibleSeries.unmatched && (
-                <circle cx={p.x} cy={p.yUnmatched} r={hoveredPoint === i ? "6" : "4"} className="fill-indigo-500 stroke-white stroke-2 opacity-50 transition-all cursor-pointer" />
+                <circle
+                  cx={p.x}
+                  cy={p.yUnmatched}
+                  r={hoveredPoint === i ? "6" : "4"}
+                  className="fill-indigo-500 stroke-white stroke-2 opacity-50 transition-all cursor-pointer"
+                />
               )}
               {visibleSeries.errored && (
-                <circle cx={p.x} cy={p.yErrored} r={hoveredPoint === i ? "6" : "4"} className="fill-red-500 stroke-white stroke-2 transition-all cursor-pointer" />
+                <circle
+                  cx={p.x}
+                  cy={p.yErrored}
+                  r={hoveredPoint === i ? "6" : "4"}
+                  className="fill-red-500 stroke-white stroke-2 transition-all cursor-pointer"
+                />
               )}
-              
+
               {/* X Axis Labels */}
-              {(i === 0 || i === points.length - 1 || (points.length > 10 && i % Math.floor(points.length / 5) === 0)) && (
-                <text x={p.x} y={height - padding + 20} textAnchor="middle" className="text-[10px] fill-gray-400 font-bold">
+              {(i === 0 ||
+                i === points.length - 1 ||
+                (points.length > 10 && i % Math.floor(points.length / 5) === 0)) && (
+                <text
+                  x={p.x}
+                  y={height - padding + 20}
+                  textAnchor="middle"
+                  className="text-[10px] fill-gray-400 font-bold"
+                >
                   {p.date}
                 </text>
               )}
-              
+
               {/* Transparent hit area for hover */}
-              <rect 
-                x={p.x - (width - 2 * padding) / (2 * (points.length - 1 || 1))} 
-                y={padding} 
-                width={(width - 2 * padding) / (points.length - 1 || 1)} 
-                height={height - 2 * padding} 
+              <rect
+                x={p.x - (width - 2 * padding) / (2 * (points.length - 1 || 1))}
+                y={padding}
+                width={(width - 2 * padding) / (points.length - 1 || 1)}
+                height={height - 2 * padding}
                 fill="transparent"
                 className="cursor-crosshair"
               />
@@ -596,12 +725,12 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
 
         {/* Custom Tooltip */}
         {hoveredPoint !== null && (
-          <div 
+          <div
             className="absolute z-10 bg-white shadow-xl border border-gray-100 rounded-2xl p-4 pointer-events-none min-w-[200px] animate-in fade-in zoom-in duration-200"
-            style={{ 
+            style={{
               left: `${(points[hoveredPoint].x / width) * 100}%`,
               top: `${(points[hoveredPoint].yVal / height) * 100}%`,
-              transform: 'translate(-50%, -120%)'
+              transform: "translate(-50%, -120%)",
             }}
           >
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 pb-2 border-b border-gray-50">
@@ -614,7 +743,9 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                     <span className="text-xs font-bold text-gray-600">Matched</span>
                   </div>
-                  <span className="text-sm font-black text-emerald-600">{points[hoveredPoint].data.matched}</span>
+                  <span className="text-sm font-black text-emerald-600">
+                    {points[hoveredPoint].data.matched}
+                  </span>
                 </div>
               )}
               {visibleSeries.unmatched && (
@@ -623,7 +754,9 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
                     <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                     <span className="text-xs font-bold text-gray-600">Unmatched</span>
                   </div>
-                  <span className="text-sm font-black text-indigo-600">{points[hoveredPoint].data.unmatched}</span>
+                  <span className="text-sm font-black text-indigo-600">
+                    {points[hoveredPoint].data.unmatched}
+                  </span>
                 </div>
               )}
               {visibleSeries.errored && (
@@ -632,13 +765,17 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, selectedRule 
                     <div className="w-2 h-2 rounded-full bg-red-500"></div>
                     <span className="text-xs font-bold text-gray-600">Errored</span>
                   </div>
-                  <span className="text-sm font-black text-red-600">{points[hoveredPoint].data.errored}</span>
+                  <span className="text-sm font-black text-red-600">
+                    {points[hoveredPoint].data.errored}
+                  </span>
                 </div>
               )}
-              {selectedRule === 'all' && (
-                 <div className="mt-2 pt-2 border-t border-gray-50">
-                    <p className="text-[10px] font-bold text-gray-400 italic">Aggregated for all rules</p>
-                 </div>
+              {selectedRule === "all" && (
+                <div className="mt-2 pt-2 border-t border-gray-50">
+                  <p className="text-[10px] font-bold text-gray-400 italic">
+                    Aggregated for all rules
+                  </p>
+                </div>
               )}
             </div>
           </div>

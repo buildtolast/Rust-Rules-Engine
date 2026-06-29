@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Zap, MessageSquare, Database, Server, HardDrive, Info } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from "react";
+import { RefreshCw, Zap, MessageSquare, Database, Server, HardDrive, Info } from "lucide-react";
 
 interface RuntimeConfig {
   max_simulation_count: number;
@@ -22,12 +22,19 @@ interface ParamRowProps {
   unit?: string;
 }
 
-function ParamRow({ envVar, value, description, increaseEffect, decreaseEffect, unit }: ParamRowProps) {
+function ParamRow({
+  envVar,
+  value,
+  description,
+  increaseEffect,
+  decreaseEffect,
+  unit,
+}: ParamRowProps) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div
       className="border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:border-indigo-200 transition-colors"
-      onClick={() => setExpanded(e => !e)}
+      onClick={() => setExpanded((e) => !e)}
     >
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -38,10 +45,13 @@ function ParamRow({ envVar, value, description, increaseEffect, decreaseEffect, 
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3">
           <span className="font-bold text-gray-900 tabular-nums text-sm">
-            {typeof value === 'number' ? value.toLocaleString() : value}
+            {typeof value === "number" ? value.toLocaleString() : value}
             {unit && <span className="text-gray-400 font-normal ml-1 text-xs">{unit}</span>}
           </span>
-          <Info size={14} className={`transition-transform text-gray-400 ${expanded ? 'rotate-180' : ''}`} />
+          <Info
+            size={14}
+            className={`transition-transform text-gray-400 ${expanded ? "rotate-180" : ""}`}
+          />
         </div>
       </div>
       {expanded && (
@@ -49,11 +59,15 @@ function ParamRow({ envVar, value, description, increaseEffect, decreaseEffect, 
           <p className="text-sm text-gray-600">{description}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">Increasing</p>
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">
+                Increasing
+              </p>
               <p className="text-sm text-emerald-800">{increaseEffect}</p>
             </div>
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">Decreasing</p>
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">
+                Decreasing
+              </p>
               <p className="text-sm text-amber-800">{decreaseEffect}</p>
             </div>
           </div>
@@ -72,12 +86,19 @@ interface StaticParamRowProps {
   note?: string;
 }
 
-function StaticParamRow({ name, value, description, increaseEffect, decreaseEffect, note }: StaticParamRowProps) {
+function StaticParamRow({
+  name,
+  value,
+  description,
+  increaseEffect,
+  decreaseEffect,
+  note,
+}: StaticParamRowProps) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div
       className="border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:border-indigo-200 transition-colors"
-      onClick={() => setExpanded(e => !e)}
+      onClick={() => setExpanded((e) => !e)}
     >
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -88,7 +109,10 @@ function StaticParamRow({ name, value, description, increaseEffect, decreaseEffe
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3">
           <span className="font-bold text-gray-900 tabular-nums text-sm">{value}</span>
-          <Info size={14} className={`transition-transform text-gray-400 ${expanded ? 'rotate-180' : ''}`} />
+          <Info
+            size={14}
+            className={`transition-transform text-gray-400 ${expanded ? "rotate-180" : ""}`}
+          />
         </div>
       </div>
       {expanded && (
@@ -101,11 +125,15 @@ function StaticParamRow({ name, value, description, increaseEffect, decreaseEffe
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">Increasing</p>
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">
+                Increasing
+              </p>
               <p className="text-sm text-emerald-800">{increaseEffect}</p>
             </div>
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">Decreasing</p>
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">
+                Decreasing
+              </p>
               <p className="text-sm text-amber-800">{decreaseEffect}</p>
             </div>
           </div>
@@ -151,7 +179,7 @@ export function ConfigTab() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch("/api/config");
       if (res.ok) {
         setConfig(await res.json());
         setLastUpdated(new Date());
@@ -164,6 +192,7 @@ export function ConfigTab() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchConfig();
   }, [fetchConfig]);
 
@@ -195,7 +224,9 @@ export function ConfigTab() {
         </div>
         <div className="flex items-center gap-3">
           {lastUpdated && (
-            <span className="text-xs text-gray-400">Updated {lastUpdated.toLocaleTimeString()}</span>
+            <span className="text-xs text-gray-400">
+              Updated {lastUpdated.toLocaleTimeString()}
+            </span>
           )}
           <button
             onClick={fetchConfig}
@@ -364,10 +395,13 @@ export function ConfigTab() {
         <div>
           <p className="text-sm font-bold text-amber-800">ClickHouse internal memory config</p>
           <p className="text-sm text-amber-700 mt-1">
-            ClickHouse has a separate in-process memory cap in <code className="bg-amber-100 px-1 rounded text-xs">deploy/clickhouse/config.xml</code>{' '}
-            (<code className="bg-amber-100 px-1 rounded text-xs">max_memory_usage</code>, currently 4G). This should be kept below
-            the Docker container limit (<code className="bg-amber-100 px-1 rounded text-xs">CLICKHOUSE_MEM_LIMIT=2G</code>).
-            Update <code className="bg-amber-100 px-1 rounded text-xs">config.xml</code> to match when you change the container limit.
+            ClickHouse has a separate in-process memory cap in{" "}
+            <code className="bg-amber-100 px-1 rounded text-xs">deploy/clickhouse/config.xml</code>{" "}
+            (<code className="bg-amber-100 px-1 rounded text-xs">max_memory_usage</code>, currently
+            4G). This should be kept below the Docker container limit (
+            <code className="bg-amber-100 px-1 rounded text-xs">CLICKHOUSE_MEM_LIMIT=2G</code>).
+            Update <code className="bg-amber-100 px-1 rounded text-xs">config.xml</code> to match
+            when you change the container limit.
           </p>
         </div>
       </div>

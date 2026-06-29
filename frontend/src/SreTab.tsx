@@ -1,27 +1,45 @@
-import { useState, useEffect, useRef } from 'react';
-import { Activity, CheckCircle, Cpu, Clock, Wifi, WifiOff, ChevronDown, ChevronRight, AlertTriangle, RotateCcw, GitPullRequest, X } from 'lucide-react';
-import type { SreFinding, SreStatus, SreContainerStatus, Incident } from './types';
+import { useState, useEffect, useRef } from "react";
+import {
+  Activity,
+  CheckCircle,
+  Cpu,
+  Clock,
+  Wifi,
+  WifiOff,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  RotateCcw,
+  GitPullRequest,
+  X,
+} from "lucide-react";
+import type { SreFinding, SreStatus, SreContainerStatus, Incident } from "./types";
 
 function isOneShot(name: string): boolean {
-  const bare = name.replace(/^rre-/, '');
-  return bare.endsWith('-init') || bare.endsWith('-patch') || bare.endsWith('-migration') || bare.includes('init');
+  const bare = name.replace(/^rre-/, "");
+  return (
+    bare.endsWith("-init") ||
+    bare.endsWith("-patch") ||
+    bare.endsWith("-migration") ||
+    bare.includes("init")
+  );
 }
 
 const SEVERITY_STYLES: Record<string, { badge: string; dot: string }> = {
-  INFO:     { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500' },
-  WARN:     { badge: 'bg-amber-50 text-amber-700 border-amber-100',       dot: 'bg-amber-400' },
-  ERROR:    { badge: 'bg-red-50 text-red-700 border-red-100',             dot: 'bg-red-500' },
-  CRITICAL: { badge: 'bg-red-100 text-red-800 border-red-200 font-black', dot: 'bg-red-700' },
+  INFO: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
+  WARN: { badge: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-400" },
+  ERROR: { badge: "bg-red-50 text-red-700 border-red-100", dot: "bg-red-500" },
+  CRITICAL: { badge: "bg-red-100 text-red-800 border-red-200 font-black", dot: "bg-red-700" },
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  crash_loop:        'Crash Loop',
-  connection_refused:'Connection Refused',
-  oom:               'Out of Memory',
-  latency:           'Latency',
-  config_error:      'Config Error',
-  normal:            'Normal',
-  other:             'Other',
+  crash_loop: "Crash Loop",
+  connection_refused: "Connection Refused",
+  oom: "Out of Memory",
+  latency: "Latency",
+  config_error: "Config Error",
+  normal: "Normal",
+  other: "Other",
 };
 
 function severityStyle(sev: string) {
@@ -29,7 +47,7 @@ function severityStyle(sev: string) {
 }
 
 function relativeTime(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
@@ -37,7 +55,7 @@ function relativeTime(iso: string | null): string {
 }
 
 function UsageBar({ pct, label, detail }: { pct: number; label: string; detail: string }) {
-  const color = pct >= 80 ? 'bg-red-500' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-500';
+  const color = pct >= 80 ? "bg-red-500" : pct >= 60 ? "bg-amber-400" : "bg-emerald-500";
   return (
     <div>
       <div className="flex justify-between mb-1">
@@ -45,44 +63,57 @@ function UsageBar({ pct, label, detail }: { pct: number; label: string; detail: 
         <span className="text-xs text-gray-500 font-medium">{detail}</span>
       </div>
       <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100).toFixed(1)}%` }} />
+        <div
+          className={`h-full rounded-full ${color}`}
+          style={{ width: `${Math.min(pct, 100).toFixed(1)}%` }}
+        />
       </div>
     </div>
   );
 }
 
 function fmtBytes(bytes: number): string {
-  if (bytes === 0) return '—';
+  if (bytes === 0) return "—";
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
   return `${(bytes / 1048576).toFixed(0)} MB`;
 }
 
 function ContainerCard({ c }: { c: SreContainerStatus }) {
-  const sev = c.last_severity ?? 'INFO';
+  const sev = c.last_severity ?? "INFO";
   const { badge } = severityStyle(sev);
-  const healthStatus = c.health?.status ?? 'none';
+  const healthStatus = c.health?.status ?? "none";
   const memPct = c.mem_limit_bytes > 0 ? (c.mem_used_bytes / c.mem_limit_bytes) * 100 : 0;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${c.running ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          <span className="font-semibold text-gray-800 text-sm truncate">{c.name.replace('rre-', '')}</span>
+          <span
+            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${c.running ? "bg-emerald-500" : "bg-red-500"}`}
+          />
+          <span className="font-semibold text-gray-800 text-sm truncate">
+            {c.name.replace("rre-", "")}
+          </span>
         </div>
         {c.last_severity && (
-          <span className={`text-xs px-2 py-0.5 rounded-full border font-bold flex-shrink-0 ${badge}`}>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full border font-bold flex-shrink-0 ${badge}`}
+          >
             {sev}
           </span>
         )}
       </div>
       <div className="flex items-center gap-3 text-xs text-gray-500">
-        <span className={`px-2 py-0.5 rounded-lg font-medium ${
-          healthStatus === 'healthy' ? 'bg-emerald-50 text-emerald-700' :
-          healthStatus === 'unhealthy' ? 'bg-red-50 text-red-700' :
-          'bg-gray-50 text-gray-500'
-        }`}>
-          {healthStatus === 'none' ? 'no healthcheck' : healthStatus}
+        <span
+          className={`px-2 py-0.5 rounded-lg font-medium ${
+            healthStatus === "healthy"
+              ? "bg-emerald-50 text-emerald-700"
+              : healthStatus === "unhealthy"
+                ? "bg-red-50 text-red-700"
+                : "bg-gray-50 text-gray-500"
+          }`}
+        >
+          {healthStatus === "none" ? "no healthcheck" : healthStatus}
         </span>
       </div>
       {c.running && (
@@ -106,8 +137,8 @@ function ContainerCard({ c }: { c: SreContainerStatus }) {
 function FindingCard({ f }: { f: SreFinding }) {
   const [expanded, setExpanded] = useState(false);
   const { badge, dot } = severityStyle(f.severity);
-  const isInfo = f.severity === 'INFO';
-  const isActionable = !isInfo && f.proposed_fix && f.proposed_fix !== 'No action required';
+  const isInfo = f.severity === "INFO";
+  const isActionable = !isInfo && f.proposed_fix && f.proposed_fix !== "No action required";
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -123,7 +154,9 @@ function FindingCard({ f }: { f: SreFinding }) {
                 {CATEGORY_LABELS[f.category] ?? f.category}
               </span>
               {f.container_name && (
-                <span className="text-xs text-gray-400 font-mono">{f.container_name.replace('rre-', '')}</span>
+                <span className="text-xs text-gray-400 font-mono">
+                  {f.container_name.replace("rre-", "")}
+                </span>
               )}
               <span className="text-xs text-gray-400 ml-auto">{relativeTime(f.observed_at)}</span>
             </div>
@@ -134,15 +167,15 @@ function FindingCard({ f }: { f: SreFinding }) {
 
       {!isInfo && f.proposed_fix && (
         <button
-          onClick={() => setExpanded(e => !e)}
+          onClick={() => setExpanded((e) => !e)}
           className={`w-full flex items-center gap-2 px-5 py-3 text-xs font-semibold border-t transition-colors ${
             isActionable
-              ? 'text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100'
-              : 'text-gray-400 bg-gray-50/50 hover:bg-gray-50 border-gray-100'
+              ? "text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100"
+              : "text-gray-400 bg-gray-50/50 hover:bg-gray-50 border-gray-100"
           }`}
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          {isActionable ? 'Proposed fix' : 'No action required'}
+          {isActionable ? "Proposed fix" : "No action required"}
         </button>
       )}
 
@@ -162,11 +195,15 @@ function formatDuration(secs: number): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function IncidentRow({ incident }: { incident: Incident }) {
@@ -174,12 +211,18 @@ function IncidentRow({ incident }: { incident: Incident }) {
   const downTime = formatTime(incident.down_at);
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-5 ${incident.active ? 'border-red-200 shadow-red-50' : 'border-gray-100'}`}>
+    <div
+      className={`bg-white rounded-2xl border shadow-sm p-5 ${incident.active ? "border-red-200 shadow-red-50" : "border-gray-100"}`}
+    >
       <div className="flex flex-wrap items-start gap-3 justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${incident.active ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`} />
+          <span
+            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${incident.active ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
+          />
           <div>
-            <span className="font-semibold text-gray-800 text-sm">{incident.container.replace('rre-', '')}</span>
+            <span className="font-semibold text-gray-800 text-sm">
+              {incident.container.replace("rre-", "")}
+            </span>
             {incident.active && (
               <span className="ml-2 text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">
                 ACTIVE OUTAGE
@@ -215,15 +258,19 @@ function IncidentRow({ incident }: { incident: Incident }) {
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Duration</p>
           <p className="font-semibold text-gray-800">
-            {incident.duration_secs != null
-              ? formatDuration(incident.duration_secs)
-              : <span className="text-red-500">Ongoing</span>}
+            {incident.duration_secs != null ? (
+              formatDuration(incident.duration_secs)
+            ) : (
+              <span className="text-red-500">Ongoing</span>
+            )}
           </p>
         </div>
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Recovery</p>
-          <p className={`font-semibold ${incident.auto_restarted ? 'text-indigo-600' : 'text-gray-500'}`}>
-            {incident.auto_restarted ? 'Automatic' : 'Manual'}
+          <p
+            className={`font-semibold ${incident.auto_restarted ? "text-indigo-600" : "text-gray-500"}`}
+          >
+            {incident.auto_restarted ? "Automatic" : "Manual"}
           </p>
         </div>
       </div>
@@ -232,7 +279,7 @@ function IncidentRow({ incident }: { incident: Incident }) {
 }
 
 export function SreTab() {
-  const [subTab, setSubTab] = useState<'findings' | 'incidents'>('findings');
+  const [subTab, setSubTab] = useState<"findings" | "incidents">("findings");
   const [status, setStatus] = useState<SreStatus | null>(null);
   const [findings, setFindings] = useState<SreFinding[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -249,9 +296,9 @@ export function SreTab() {
   const fetchAll = async () => {
     try {
       const [statusRes, findingsRes, outagesRes] = await Promise.all([
-        fetch('/api/sre/status'),
-        fetch('/api/sre/findings'),
-        fetch('/api/sre/outages'),
+        fetch("/api/sre/status"),
+        fetch("/api/sre/findings"),
+        fetch("/api/sre/outages"),
       ]);
       if (statusRes.ok) setStatus(await statusRes.json());
       if (findingsRes.ok) {
@@ -265,18 +312,21 @@ export function SreTab() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
     const poll = setInterval(fetchAll, 30_000);
 
-    const es = new EventSource('/api/sre/findings/stream');
+    const es = new EventSource("/api/sre/findings/stream");
     esRef.current = es;
     es.onopen = () => setSseConnected(true);
     es.onerror = () => setSseConnected(false);
     es.onmessage = (e) => {
       try {
         const f: SreFinding = JSON.parse(e.data);
-        setFindings(prev => [f, ...prev].slice(0, 100));
-      } catch { /* ignore parse errors */ }
+        setFindings((prev) => [f, ...prev].slice(0, 100));
+      } catch {
+        /* ignore parse errors */
+      }
     };
 
     return () => {
@@ -291,36 +341,40 @@ export function SreTab() {
     setPrUrl(null);
     setRemediateOpen(true);
     try {
-      const res = await fetch('/api/remediate', { method: 'POST' });
+      const res = await fetch("/api/remediate", { method: "POST" });
       if (!res.ok || !res.body) {
-        setRemediateLog(['Error: remediation server unreachable. Run: python3 tools/sre-remediate.py --serve']);
+        setRemediateLog([
+          "Error: remediation server unreachable. Run: python3 tools/sre-remediate.py --serve",
+        ]);
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buf = '';
+      let buf = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        const parts = buf.split('\n\n');
-        buf = parts.pop() ?? '';
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
         for (const part of parts) {
-          const dataLine = part.split('\n').find(l => l.startsWith('data: '));
+          const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
           if (!dataLine) continue;
           try {
             const payload = JSON.parse(dataLine.slice(6));
             if (payload.line !== undefined) {
               const line: string = payload.line;
-              setRemediateLog(prev => [...prev, line]);
+              setRemediateLog((prev) => [...prev, line]);
               const m = line.match(/https?:\/\/github\.com\/\S+/);
               if (m) setPrUrl(m[0]);
             }
-          } catch { /* ignore malformed SSE */ }
+          } catch {
+            /* ignore malformed SSE */
+          }
         }
       }
     } catch {
-      setRemediateLog(prev => [...prev, 'Connection lost.']);
+      setRemediateLog((prev) => [...prev, "Connection lost."]);
     } finally {
       setRemediating(false);
     }
@@ -328,13 +382,13 @@ export function SreTab() {
 
   // Auto-scroll log to bottom
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [remediateLog]);
 
   const llmAvailable = status?.llm_available ?? false;
-  const containers = (status?.containers ?? []).filter(c => !isOneShot(c.name));
+  const containers = (status?.containers ?? []).filter((c) => !isOneShot(c.name));
   const lastScan = status?.last_scan_at ?? null;
-  const activeOutages = incidents.filter(i => i.active && !isOneShot(i.container));
+  const activeOutages = incidents.filter((i) => i.active && !isOneShot(i.container));
 
   return (
     <div className="space-y-6">
@@ -347,8 +401,10 @@ export function SreTab() {
             ) : (
               <WifiOff size={16} className="text-amber-400" />
             )}
-            <span className={`text-sm font-semibold ${llmAvailable ? 'text-emerald-700' : 'text-amber-600'}`}>
-              LLM {llmAvailable ? 'Active' : 'Unavailable'}
+            <span
+              className={`text-sm font-semibold ${llmAvailable ? "text-emerald-700" : "text-amber-600"}`}
+            >
+              LLM {llmAvailable ? "Active" : "Unavailable"}
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -356,9 +412,11 @@ export function SreTab() {
             Last scan: {relativeTime(lastScan)}
           </div>
           <div className="flex items-center gap-1.5 text-sm">
-            <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
-            <span className={sseConnected ? 'text-emerald-600 font-medium' : 'text-gray-400'}>
-              {sseConnected ? 'Live' : 'Polling'}
+            <span
+              className={`w-2 h-2 rounded-full ${sseConnected ? "bg-emerald-500 animate-pulse" : "bg-gray-300"}`}
+            />
+            <span className={sseConnected ? "text-emerald-600 font-medium" : "text-gray-400"}>
+              {sseConnected ? "Live" : "Polling"}
             </span>
           </div>
         </div>
@@ -374,12 +432,12 @@ export function SreTab() {
             disabled={remediating}
             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors ${
               remediating
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}
           >
             <GitPullRequest size={13} />
-            {remediating ? 'Remediating…' : 'Remediate'}
+            {remediating ? "Remediating…" : "Remediate"}
           </button>
         </div>
       </div>
@@ -391,9 +449,7 @@ export function SreTab() {
             <div className="flex items-center gap-2">
               <GitPullRequest size={14} className="text-indigo-400" />
               <span className="text-sm font-semibold text-gray-200">Remediation Pipeline</span>
-              {remediating && (
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-              )}
+              {remediating && <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />}
             </div>
             <div className="flex items-center gap-3">
               {prUrl && (
@@ -419,15 +475,23 @@ export function SreTab() {
               <span className="text-gray-500">Starting pipeline…</span>
             )}
             {remediateLog.map((line, i) => (
-              <div key={i} className={`${
-                line.includes('✅') || line.includes('PR created') ? 'text-emerald-400' :
-                line.includes('Error') || line.includes('error') ? 'text-red-400' :
-                line.startsWith('    ✓') ? 'text-emerald-500' :
-                line.startsWith('    ~') ? 'text-gray-500' :
-                line.startsWith('[') ? 'text-indigo-300' :
-                'text-gray-300'
-              }`}>
-                {line || ' '}
+              <div
+                key={i}
+                className={`${
+                  line.includes("✅") || line.includes("PR created")
+                    ? "text-emerald-400"
+                    : line.includes("Error") || line.includes("error")
+                      ? "text-red-400"
+                      : line.startsWith("    ✓")
+                        ? "text-emerald-500"
+                        : line.startsWith("    ~")
+                          ? "text-gray-500"
+                          : line.startsWith("[")
+                            ? "text-indigo-300"
+                            : "text-gray-300"
+                }`}
+              >
+                {line || " "}
               </div>
             ))}
             {!remediating && remediateLog.length > 0 && (
@@ -450,7 +514,9 @@ export function SreTab() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {containers.map(c => <ContainerCard key={c.name} c={c} />)}
+            {containers.map((c) => (
+              <ContainerCard key={c.name} c={c} />
+            ))}
           </div>
         )}
       </section>
@@ -458,11 +524,11 @@ export function SreTab() {
       {/* Sub-tab nav */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         <button
-          onClick={() => setSubTab('findings')}
+          onClick={() => setSubTab("findings")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-            subTab === 'findings'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+            subTab === "findings"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           <span className="flex items-center gap-2">
@@ -476,11 +542,11 @@ export function SreTab() {
           </span>
         </button>
         <button
-          onClick={() => setSubTab('incidents')}
+          onClick={() => setSubTab("incidents")}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-            subTab === 'incidents'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+            subTab === "incidents"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           <span className="flex items-center gap-2">
@@ -496,7 +562,7 @@ export function SreTab() {
       </div>
 
       {/* Findings panel */}
-      {subTab === 'findings' && (
+      {subTab === "findings" && (
         <section>
           {findings.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -504,21 +570,23 @@ export function SreTab() {
                 <CheckCircle size={32} className="text-gray-200" />
                 <p className="text-sm">
                   {llmAvailable
-                    ? 'No findings yet — first scan in progress.'
-                    : 'LLM unavailable. Findings will appear once the LLM is reachable.'}
+                    ? "No findings yet — first scan in progress."
+                    : "LLM unavailable. Findings will appear once the LLM is reachable."}
                 </p>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              {findings.map((f, i) => <FindingCard key={`${f.container_name}-${f.observed_at}-${i}`} f={f} />)}
+              {findings.map((f, i) => (
+                <FindingCard key={`${f.container_name}-${f.observed_at}-${i}`} f={f} />
+              ))}
             </div>
           )}
         </section>
       )}
 
       {/* Incidents panel */}
-      {subTab === 'incidents' && (
+      {subTab === "incidents" && (
         <section>
           {incidents.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -538,30 +606,4 @@ export function SreTab() {
       )}
     </div>
   );
-}
-
-export function useActiveOutages(): Incident[] {
-  const [active, setActive] = useState<Incident[]>([]);
-
-  useEffect(() => {
-    const fetch_ = () =>
-      fetch('/api/sre/outages')
-        .then(r => r.ok ? r.json() : [])
-        .then((data: Incident[]) => {
-          const next = data.filter(i => i.active && !isOneShot(i.container));
-          // Only update state if the set of active containers changed.
-          setActive(prev => {
-            const prevKeys = prev.map(i => i.container).sort().join(',');
-            const nextKeys = next.map(i => i.container).sort().join(',');
-            return prevKeys === nextKeys ? prev : next;
-          });
-        })
-        .catch(() => {});
-
-    fetch_();
-    const t = setInterval(fetch_, 30_000);
-    return () => clearInterval(t);
-  }, []);
-
-  return active;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 interface ServiceStatus {
   ok: boolean;
@@ -8,7 +8,7 @@ interface ServiceStatus {
 
 interface BacklogInfo {
   consumer_lag_total: number;
-  lag_trend: 'growing' | 'stable' | 'draining';
+  lag_trend: "growing" | "stable" | "draining";
   ch_backlog_batches: number;
   weakest_link: string | null;
   weakest_link_reasoning: string | null;
@@ -27,16 +27,16 @@ interface SystemReadyResponse {
 const POLL_INTERVAL_MS = 5_000;
 
 const SERVICE_LABELS: Record<string, string> = {
-  postgres:   'Postgres',
-  clickhouse: 'ClickHouse',
-  kafka:      'Kafka',
-  app:        'App',
+  postgres: "Postgres",
+  clickhouse: "ClickHouse",
+  kafka: "Kafka",
+  app: "App",
 };
 
 const LAG_TREND_COLORS: Record<string, string> = {
-  growing:  'text-red-400',
-  stable:   'text-yellow-400',
-  draining: 'text-emerald-400',
+  growing: "text-red-400",
+  stable: "text-yellow-400",
+  draining: "text-emerald-400",
 };
 
 function ServiceRow({ name, svc }: { name: string; svc: ServiceStatus }) {
@@ -44,28 +44,24 @@ function ServiceRow({ name, svc }: { name: string; svc: ServiceStatus }) {
     <div className="flex items-center gap-3 py-2 border-b border-gray-700 last:border-0">
       <span
         className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-          svc.ok ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'
+          svc.ok ? "bg-emerald-500" : "bg-red-500 animate-pulse"
         }`}
       />
       <span className="w-28 font-semibold text-gray-200 flex-shrink-0">
         {SERVICE_LABELS[name] ?? name}
       </span>
-      <span className="text-gray-400 text-xs w-20 flex-shrink-0">
-        {svc.latency_ms} ms
-      </span>
+      <span className="text-gray-400 text-xs w-20 flex-shrink-0">{svc.latency_ms} ms</span>
       {svc.error && (
         <span className="text-red-400 text-xs truncate" title={svc.error}>
           {svc.error}
         </span>
       )}
-      {!svc.error && svc.ok && (
-        <span className="text-emerald-500 text-xs">operational</span>
-      )}
+      {!svc.error && svc.ok && <span className="text-emerald-500 text-xs">operational</span>}
     </div>
   );
 }
 
-const KNOWN_SERVICES = ['postgres', 'clickhouse', 'kafka', 'app'] as const;
+const KNOWN_SERVICES = ["postgres", "clickhouse", "kafka", "app"] as const;
 
 function BlockingOverlay({
   data,
@@ -78,20 +74,26 @@ function BlockingOverlay({
 }) {
   const services: [string, ServiceStatus][] = data
     ? Object.entries(data.services)
-    : KNOWN_SERVICES.map((name) => [
-        name,
-        { ok: false, latency_ms: 0, error: 'unreachable' },
-      ]);
+    : KNOWN_SERVICES.map((name) => [name, { ok: false, latency_ms: 0, error: "unreachable" }]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-gray-950/95 backdrop-blur-sm flex items-center justify-center p-6">
       <div className="bg-gray-900 border border-red-800/40 rounded-2xl shadow-2xl w-full max-w-lg p-8">
-
         {/* App identity */}
         <div className="flex items-center gap-3 mb-5">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
+            <svg
+              className="w-4 h-4 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"
+              />
             </svg>
           </div>
           <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
@@ -102,15 +104,13 @@ function BlockingOverlay({
         {/* Status heading */}
         <div className="flex items-center gap-2.5 mb-3">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-          <h2 className="text-xl font-bold text-red-400 tracking-tight">
-            System Unavailable
-          </h2>
+          <h2 className="text-xl font-bold text-red-400 tracking-tight">System Unavailable</h2>
         </div>
 
         <p className="text-gray-400 text-sm mb-6 leading-relaxed">
           {fetchError
-            ? 'Cannot reach the backend. The system will reconnect automatically.'
-            : 'One or more critical services are unreachable. The dashboard will resume once all services recover.'}
+            ? "Cannot reach the backend. The system will reconnect automatically."
+            : "One or more critical services are unreachable. The dashboard will resume once all services recover."}
         </p>
 
         {/* Service list — always shown */}
@@ -139,11 +139,11 @@ function BlockingOverlay({
 
         {lastChecked && (
           <p className="text-xs text-gray-600 text-right">
-            Last checked{' '}
+            Last checked{" "}
             {lastChecked.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
             })}
           </p>
         )}
@@ -153,9 +153,7 @@ function BlockingOverlay({
 }
 
 function DegradedBanner({ data }: { data: SystemReadyResponse }) {
-  const degradedServices = Object.entries(data.services).filter(
-    ([, svc]) => !svc.ok,
-  );
+  const degradedServices = Object.entries(data.services).filter(([, svc]) => !svc.ok);
   const backlog = data.backlog;
 
   return (
@@ -167,13 +165,9 @@ function DegradedBanner({ data }: { data: SystemReadyResponse }) {
             <span className="font-bold text-amber-300">Degraded — </span>
             {degradedServices.map(([name, svc], i) => (
               <span key={name}>
-                {i > 0 && ', '}
-                <span className="font-semibold">
-                  {SERVICE_LABELS[name] ?? name}
-                </span>
-                {svc.error && (
-                  <span className="text-amber-300/80 ml-1">({svc.error})</span>
-                )}
+                {i > 0 && ", "}
+                <span className="font-semibold">{SERVICE_LABELS[name] ?? name}</span>
+                {svc.error && <span className="text-amber-300/80 ml-1">({svc.error})</span>}
               </span>
             ))}
           </div>
@@ -182,27 +176,25 @@ function DegradedBanner({ data }: { data: SystemReadyResponse }) {
         {backlog && (
           <div className="ml-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-200/80">
             <span>
-              {backlog.consumer_lag_total.toLocaleString()} messages queued,{' '}
+              {backlog.consumer_lag_total.toLocaleString()} messages queued,{" "}
               {backlog.ch_backlog_batches} audit batches buffered
             </span>
             <span>
-              Lag:{' '}
+              Lag:{" "}
               <span
-                className={`font-semibold ${LAG_TREND_COLORS[backlog.lag_trend] ?? 'text-amber-300'}`}
+                className={`font-semibold ${LAG_TREND_COLORS[backlog.lag_trend] ?? "text-amber-300"}`}
               >
                 {backlog.lag_trend}
               </span>
             </span>
             {backlog.weakest_link && (
               <span>
-                Bottleneck:{' '}
+                Bottleneck:{" "}
                 <span className="font-semibold text-amber-300">
                   {SERVICE_LABELS[backlog.weakest_link] ?? backlog.weakest_link}
                 </span>
                 {backlog.weakest_link_reasoning && (
-                  <span className="text-amber-200/60 ml-1">
-                    — {backlog.weakest_link_reasoning}
-                  </span>
+                  <span className="text-amber-200/60 ml-1">— {backlog.weakest_link_reasoning}</span>
                 )}
               </span>
             )}
@@ -225,7 +217,7 @@ export function SystemHealthOverlay() {
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch('/api/system/ready');
+      const res = await fetch("/api/system/ready");
       if (!res.ok) {
         setFetchError(true);
         return;
@@ -241,6 +233,7 @@ export function SystemHealthOverlay() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     poll();
     const t = setInterval(poll, POLL_INTERVAL_MS);
     return () => clearInterval(t);
@@ -248,13 +241,7 @@ export function SystemHealthOverlay() {
 
   // Show blocking overlay when fetch fails or critical services are down
   if (fetchError || (data && isBlocking(data))) {
-    return (
-      <BlockingOverlay
-        data={data}
-        fetchError={fetchError}
-        lastChecked={lastChecked}
-      />
-    );
+    return <BlockingOverlay data={data} fetchError={fetchError} lastChecked={lastChecked} />;
   }
 
   // Show degraded banner when degraded but not blocking

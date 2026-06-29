@@ -1,13 +1,56 @@
 #!/bin/sh
-# Auto-format all Rust code, re-stage the changes, then run clippy.
+# Pre-commit hook: auto-format and lint all languages in the project.
 # Installed automatically by cargo-husky on `cargo test`.
+# Only staged files are checked for non-Rust languages to avoid blocking
+# commits on pre-existing issues in untouched files.
 set -e
 
-echo "==> cargo fmt"
-cargo fmt --all
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-# Re-stage any files rustfmt changed so the formatted version is what gets committed.
+# ── Rust ─────────────────────────────────────────────────────────────────────
+echo "==> [rust] cargo fmt (nightly rustfmt)"
+NIGHTLY_BIN="$(dirname "$(rustup which --toolchain nightly rustfmt)")"
+PATH="$NIGHTLY_BIN:$PATH" cargo fmt --all
 git add -u
 
-echo "==> cargo clippy"
+echo "==> [rust] cargo clippy"
 cargo clippy --all-targets -- -D warnings
+
+# ── TypeScript / JavaScript (staged files only) ───────────────────────────────
+FRONTEND="$REPO_ROOT/frontend"
+TS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|css)$' | sed "s|^|$REPO_ROOT/|" || true)
+
+if [ -n "$TS_FILES" ] && [ -f "$FRONTEND/package.json" ] && [ -d "$FRONTEND/node_modules" ]; then
+  echo "==> [ts/js] prettier (staged files)"
+  echo "$TS_FILES" | xargs "$FRONTEND/node_modules/.bin/prettier" --write --log-level warn
+  git add -u
+
+  echo "==> [ts/js] eslint (staged files)"
+  echo "$TS_FILES" | xargs "$FRONTEND/node_modules/.bin/eslint" --max-warnings 0
+elif [ -n "$TS_FILES" ]; then
+  echo "==> [ts/js] skipping (run 'npm install' in frontend/)"
+fi
+
+# ── Python (staged files only) ───────────────────────────────────────────────
+PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+if [ -n "$PY_FILES" ]; then
+  if command -v ruff > /dev/null 2>&1; then
+    echo "==> [python] ruff format + check (staged files)"
+    echo "$PY_FILES" | xargs ruff format
+    echo "$PY_FILES" | xargs ruff check --fix
+    git add -u
+  else
+    echo "==> [python] skipping (install ruff: pip install ruff)"
+  fi
+fi
+
+# ── Shell scripts (staged files only) ────────────────────────────────────────
+SH_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)
+if [ -n "$SH_FILES" ]; then
+  if command -v shellcheck > /dev/null 2>&1; then
+    echo "==> [shell] shellcheck (staged files)"
+    echo "$SH_FILES" | xargs shellcheck
+  else
+    echo "==> [shell] skipping (install shellcheck: brew install shellcheck)"
+  fi
+fi

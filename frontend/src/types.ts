@@ -36,7 +36,7 @@ export interface AnalyticsStats {
 export interface SreFinding {
   container_name: string;
   observed_at: string | null;
-  severity: 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
+  severity: "INFO" | "WARN" | "ERROR" | "CRITICAL";
   category: string;
   finding: string;
   proposed_fix: string;
@@ -73,7 +73,7 @@ export interface Incident {
 export interface AuditRecord {
   auditId: string;
   ruleId: string;
-  auditType: 'MATCHED' | 'UNMATCHED' | 'ERRORED';
+  auditType: "MATCHED" | "UNMATCHED" | "ERRORED";
   reason?: string;
   sourceEvent: string;
   routedEvent?: string;

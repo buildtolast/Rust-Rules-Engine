@@ -240,6 +240,7 @@ services:
       TARGET_TOPIC: ${TARGET_TOPIC:-target-events}
       CONSUMER_GROUP: ${CONSUMER_GROUP:-rules-engine}
       HTTP_PORT: 8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:${FRONTEND_PORT:-3000}}
       RUST_LOG: ${RUST_LOG:-info}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
       OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-0.1}

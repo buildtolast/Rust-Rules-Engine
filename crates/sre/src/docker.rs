@@ -90,10 +90,12 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
 }
 
 /// Returns `(cpu_percent, mem_used_bytes, mem_limit_bytes)` for a running container.
-/// Uses `one_shot=true` so the API returns immediately with a single sample.
+/// `one_shot=false, stream=false` makes Docker return two samples ~1s apart so the
+/// cpu_delta is meaningful. `one_shot=true` returns a single snapshot where precpu_stats
+/// equals cpu_stats and always yields 0% CPU.
 /// Returns `None` for stopped containers or on any API error.
 pub async fn fetch_stats(docker: &Docker, id: &str) -> Option<(f64, u64, u64)> {
-    let opts = StatsOptions { stream: false, one_shot: true };
+    let opts = StatsOptions { stream: false, one_shot: false };
     let stats = docker
         .stats(id, Some(opts))
         .next()

@@ -140,16 +140,30 @@ async fn scan_once(
         }
     };
 
-    // Update container statuses in shared state, excluding one-time init/patch/migration jobs.
+    // Fetch stats for all running containers concurrently (one_shot=false blocks ~1s each).
     {
-        let mut statuses = Vec::new();
-        for c in containers.iter().filter(|c| !is_one_shot_by_name(&c.name)) {
-            let (cpu_percent, mem_used_bytes, mem_limit_bytes) = if c.running {
-                docker::fetch_stats(docker, &c.id).await.unwrap_or((0.0, 0, 0))
-            } else {
-                (0.0, 0, 0)
-            };
-            statuses.push(ContainerStatus {
+        let active: Vec<_> = containers
+            .iter()
+            .filter(|c| !is_one_shot_by_name(&c.name))
+            .collect();
+
+        let stats_futs = active.iter().map(|c| {
+            let docker = docker.clone();
+            let id = c.id.clone();
+            async move {
+                if c.running {
+                    docker::fetch_stats(&docker, &id).await.unwrap_or((0.0, 0, 0))
+                } else {
+                    (0.0, 0, 0)
+                }
+            }
+        });
+        let all_stats: Vec<_> = futures_util::future::join_all(stats_futs).await;
+
+        let statuses = active
+            .iter()
+            .zip(all_stats)
+            .map(|(c, (cpu_percent, mem_used_bytes, mem_limit_bytes))| ContainerStatus {
                 name: c.name.clone(),
                 id: c.id.clone(),
                 running: c.running,
@@ -160,8 +174,9 @@ async fn scan_once(
                 cpu_percent,
                 mem_used_bytes,
                 mem_limit_bytes,
-            });
-        }
+            })
+            .collect();
+
         let mut st = state.write().await;
         st.containers = statuses;
         st.last_scan_at = Some(Utc::now());

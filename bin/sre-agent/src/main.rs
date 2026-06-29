@@ -37,6 +37,17 @@ async fn main() {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(300),
+        auto_tune: std::env::var("AUTO_TUNE")
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false),
+        auto_tune_compose_file: std::env::var("AUTO_TUNE_COMPOSE_FILE")
+            .unwrap_or_else(|_| "/deploy/docker-compose.yml".into()),
+        auto_tune_env_file: std::env::var("AUTO_TUNE_ENV_FILE")
+            .unwrap_or_else(|_| "/deploy/.env".into()),
+        auto_tune_cooldown_secs: std::env::var("AUTO_TUNE_COOLDOWN_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(600),
         probe: sre::probes::ProbeConfig {
             kafka_brokers: std::env::var("KAFKA_BROKERS")
                 .unwrap_or_else(|_| "redpanda-0:9092,redpanda-1:9092,redpanda-2:9092".into()),

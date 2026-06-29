@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod auto_tune;
 pub mod dashboard;
 pub mod docker;
 pub mod probes;
@@ -34,6 +35,10 @@ pub struct SreConfig {
     pub dashboard_port: u16,
     pub auto_restart: bool,
     pub restart_cooldown_secs: u64,
+    pub auto_tune: bool,
+    pub auto_tune_compose_file: String,
+    pub auto_tune_env_file: String,
+    pub auto_tune_cooldown_secs: u64,
     pub probe: ProbeConfig,
 }
 
@@ -127,6 +132,7 @@ async fn scan_once(
     tx: &broadcast::Sender<Finding>,
     cfg: &SreConfig,
     ch: &Client,
+    tuner: &Arc<auto_tune::AutoTuner>,
 ) {
     // Probe LLM once per scan so the badge reflects real availability even when
     // all containers are healthy and no analysis calls are made.
@@ -230,6 +236,18 @@ async fn scan_once(
                 let mut st = state.write().await;
                 st.findings.push_front(finding);
                 st.findings.truncate(200);
+
+                // Auto-tune: on CRITICAL pressure, update .env and restart the service.
+                if severity == "CRITICAL" {
+                    let tuner = tuner.clone();
+                    let name = cs.name.clone();
+                    let used = cs.mem_used_bytes;
+                    tokio::spawn(async move {
+                        if let Some(msg) = tuner.maybe_tune(&name, used).await {
+                            tracing::info!(action = "auto_tune", "{msg}");
+                        }
+                    });
+                }
             }
         }
     }
@@ -478,9 +496,15 @@ async fn analysis_loop(
 ) {
     let ch = ch_client(&cfg);
     let mut store = SreStore::new(&ch);
+    let tuner = Arc::new(auto_tune::AutoTuner::new(
+        cfg.auto_tune,
+        cfg.auto_tune_compose_file.clone(),
+        cfg.auto_tune_env_file.clone(),
+        cfg.auto_tune_cooldown_secs,
+    ));
 
     loop {
-        scan_once(&docker, &llm, &mut store, &state, &tx, &cfg, &ch).await;
+        scan_once(&docker, &llm, &mut store, &state, &tx, &cfg, &ch, &tuner).await;
         tokio::time::sleep(cfg.scan_interval).await;
     }
 }

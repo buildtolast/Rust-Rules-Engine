@@ -12,5 +12,17 @@ RUN cargo build --release -p sre-agent
 
 FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+# Install docker CLI + compose plugin (multi-arch: amd64 / arm64)
+ARG TARGETARCH=amd64
+RUN set -eux; \
+    DOCKER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64"); \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.5.1.tgz" \
+      | tar -xz --strip-components=1 -C /usr/local/bin docker/docker; \
+    mkdir -p /usr/local/lib/docker/cli-plugins; \
+    curl -fsSL "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-${DOCKER_ARCH}" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose; \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
 COPY --from=builder /build/target/release/sre-agent /usr/local/bin/
 CMD ["sre-agent"]

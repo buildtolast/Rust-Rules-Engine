@@ -284,6 +284,8 @@ services:
       dockerfile: deploy/Dockerfile.sre
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-compose.yml:/deploy/docker-compose.yml:ro
+      - ./.env:/deploy/.env:rw
     environment:
       <<: *llm-env
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -294,6 +296,10 @@ services:
       LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
       AUTO_RESTART: ${AUTO_RESTART:-true}
       RESTART_COOLDOWN_SECS: ${RESTART_COOLDOWN_SECS:-300}
+      AUTO_TUNE: ${AUTO_TUNE:-false}
+      AUTO_TUNE_COMPOSE_FILE: /deploy/docker-compose.yml
+      AUTO_TUNE_ENV_FILE: /deploy/.env
+      AUTO_TUNE_COOLDOWN_SECS: ${AUTO_TUNE_COOLDOWN_SECS:-600}
       RUST_LOG: info
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}
       OTEL_SAMPLE_RATE: ${OTEL_SAMPLE_RATE:-1.0}

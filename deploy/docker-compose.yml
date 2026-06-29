@@ -269,7 +269,7 @@ services:
       replicas: ${APP_REPLICAS:-2}
       resources:
         limits:
-          memory: ${APP_MEM_LIMIT:-512M}
+          memory: ${APP_MEM_LIMIT:-1217M}
 
   # ── SRE Agent — 2 replicas ───────────────────────────────────────────────────
   # Both replicas scan all containers; findings are deduped in ClickHouse

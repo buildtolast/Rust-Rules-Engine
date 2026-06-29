@@ -259,6 +259,7 @@ services:
         condition: service_healthy
       redpanda-init:
         condition: service_completed_successfully
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 15s
@@ -290,7 +291,7 @@ services:
       CLICKHOUSE_PASSWORD: rules
       SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-5}
       LOG_TAIL_LINES: ${LOG_TAIL_LINES:-200}
-      AUTO_RESTART: ${AUTO_RESTART:-false}
+      AUTO_RESTART: ${AUTO_RESTART:-true}
       RESTART_COOLDOWN_SECS: ${RESTART_COOLDOWN_SECS:-300}
       RUST_LOG: info
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://otel-collector:4317}

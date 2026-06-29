@@ -49,35 +49,28 @@ pub fn router(state: AppState, allowed_origins: Vec<axum::http::HeaderValue>) ->
         tracing::warn!("ALLOWED_ORIGINS not set — CORS is permissive (all origins allowed)");
         CorsLayer::permissive()
     } else {
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(allowed_origins))
-            .allow_methods(Any)
-            .allow_headers(Any)
+        CorsLayer::new().allow_origin(AllowOrigin::list(allowed_origins))
+                        .allow_methods(Any)
+                        .allow_headers(Any)
     };
 
-    Router::new()
-        .route("/health", get(routes::health::health))
-        .route("/health/ready", get(routes::health::ready))
-        .route(
-            "/api/rules",
-            get(routes::rules::list).post(routes::rules::create),
-        )
-        .route(
-            "/api/rules/:id",
-            get(routes::rules::get_one)
-                .put(routes::rules::update)
-                .delete(routes::rules::delete_one),
-        )
-        .route("/api/config", get(routes::config::get_config))
-        .route("/api/analytics/stats", get(routes::analytics::stats))
-        .route("/api/reports/top", get(routes::reports::top))
-        .route("/api/reports/export", get(routes::reports::export))
-        .route("/api/metrics", get(routes::metrics::metrics))
-        .route("/api/simulation/push", post(routes::simulation::push))
-        .route("/api/integration/status", get(routes::integration::status))
-        .route("/api/integration/run", post(routes::integration::run))
-        .route("/tests", get(routes::integration::page))
-        .layer(TraceLayer::new_for_http())
-        .layer(cors)
-        .with_state(state)
+    Router::new().route("/health", get(routes::health::health))
+                 .route("/health/ready", get(routes::health::ready))
+                 .route("/api/rules",
+                        get(routes::rules::list).post(routes::rules::create))
+                 .route("/api/rules/:id",
+                        get(routes::rules::get_one).put(routes::rules::update)
+                                                   .delete(routes::rules::delete_one))
+                 .route("/api/config", get(routes::config::get_config))
+                 .route("/api/analytics/stats", get(routes::analytics::stats))
+                 .route("/api/reports/top", get(routes::reports::top))
+                 .route("/api/reports/export", get(routes::reports::export))
+                 .route("/api/metrics", get(routes::metrics::metrics))
+                 .route("/api/simulation/push", post(routes::simulation::push))
+                 .route("/api/integration/status", get(routes::integration::status))
+                 .route("/api/integration/run", post(routes::integration::run))
+                 .route("/tests", get(routes::integration::page))
+                 .layer(TraceLayer::new_for_http())
+                 .layer(cors)
+                 .with_state(state)
 }

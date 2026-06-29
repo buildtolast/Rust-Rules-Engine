@@ -19,22 +19,19 @@ pub struct SourceEvent {
 
 impl SourceEvent {
     /// Build from a consumed Kafka record, parsing the raw JSON payload once.
-    pub fn from_kafka(
-        topic: &str,
-        partition: i32,
-        offset: i64,
-        timestamp_ms: i64,
-        raw: &str,
-    ) -> Result<Self, serde_json::Error> {
+    pub fn from_kafka(topic: &str,
+                      partition: i32,
+                      offset: i64,
+                      timestamp_ms: i64,
+                      raw: &str)
+                      -> Result<Self, serde_json::Error> {
         let payload = serde_json::from_str(raw)?;
-        Ok(Self {
-            topic: topic.to_owned(),
-            partition,
-            offset,
-            timestamp_ms,
-            raw: raw.to_owned(),
-            payload,
-        })
+        Ok(Self { topic: topic.to_owned(),
+                  partition,
+                  offset,
+                  timestamp_ms,
+                  raw: raw.to_owned(),
+                  payload })
     }
 }
 

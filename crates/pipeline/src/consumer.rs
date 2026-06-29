@@ -87,12 +87,11 @@ struct LagRow {
     txn_ms: i64,
 }
 
-pub async fn run(
-    config: PipelineConfig,
-    cache: RuleCache,
-    ch_cfg: store_clickhouse::ClickHouseConfig,
-    counters: Arc<PipelineCounters>,
-) -> Result<(), PipelineError> {
+pub async fn run(config: PipelineConfig,
+                 cache: RuleCache,
+                 ch_cfg: store_clickhouse::ClickHouseConfig,
+                 counters: Arc<PipelineCounters>)
+                 -> Result<(), PipelineError> {
     // ── Shared health flags ──────────────────────────────────────────────────
     let postgres_healthy = Arc::new(AtomicBool::new(true));
     let clickhouse_healthy = Arc::new(AtomicBool::new(true));
@@ -161,27 +160,26 @@ pub async fn run(
     let backlog_loop = Arc::clone(&backlog_arc);
     let pipeline_handle = tokio::task::spawn_blocking(move || -> Result<(), PipelineError> {
         let counters = counters;
-        let consumer: BaseConsumer = ClientConfig::new()
-            .set("bootstrap.servers", &config.brokers)
-            .set("group.id", &config.consumer_group)
-            .set("enable.auto.commit", "false")
-            .set("isolation.level", "read_committed")
-            .set("auto.offset.reset", "earliest")
-            .set("fetch.min.bytes", "262144")
-            .set("fetch.wait.max.ms", "50")
-            .set("max.poll.interval.ms", "300000")
-            .create()?;
+        let consumer: BaseConsumer = ClientConfig::new().set("bootstrap.servers", &config.brokers)
+                                                        .set("group.id", &config.consumer_group)
+                                                        .set("enable.auto.commit", "false")
+                                                        .set("isolation.level", "read_committed")
+                                                        .set("auto.offset.reset", "earliest")
+                                                        .set("fetch.min.bytes", "262144")
+                                                        .set("fetch.wait.max.ms", "50")
+                                                        .set("max.poll.interval.ms", "300000")
+                                                        .create()?;
 
         consumer.subscribe(&[config.source_topic.as_str()])?;
 
-        let producer: BaseProducer = ClientConfig::new()
-            .set("bootstrap.servers", &config.brokers)
-            .set("enable.idempotence", "true")
-            .set("transactional.id", &config.transactional_id)
-            .set("acks", "all")
-            .set("batch.size", "524288")
-            .set("linger.ms", "5")
-            .create()?;
+        let producer: BaseProducer =
+            ClientConfig::new().set("bootstrap.servers", &config.brokers)
+                               .set("enable.idempotence", "true")
+                               .set("transactional.id", &config.transactional_id)
+                               .set("acks", "all")
+                               .set("batch.size", "524288")
+                               .set("linger.ms", "5")
+                               .create()?;
 
         producer.init_transactions(Duration::from_secs(30))?;
 
@@ -232,24 +230,19 @@ pub async fn run(
 
                 match consumer.poll(remaining.min(Duration::from_millis(10))) {
                     Some(Ok(m)) => {
-                        let ts_ms = m
-                            .timestamp()
-                            .to_millis()
-                            .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+                        let ts_ms = m.timestamp()
+                                     .to_millis()
+                                     .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
                         match m.payload_view::<str>() {
-                            Some(Ok(s)) => batch.push(OwnedMsg {
-                                topic: m.topic().to_string(),
-                                partition: m.partition(),
-                                offset: m.offset(),
-                                ts_ms,
-                                raw: s.to_string(),
-                            }),
-                            _ => tracing::warn!(
-                                topic = m.topic(),
-                                partition = m.partition(),
-                                offset = m.offset(),
-                                "non-UTF-8 payload, skipping"
-                            ),
+                            Some(Ok(s)) => batch.push(OwnedMsg { topic: m.topic().to_string(),
+                                                                 partition: m.partition(),
+                                                                 offset: m.offset(),
+                                                                 ts_ms,
+                                                                 raw: s.to_string() }),
+                            _ => tracing::warn!(topic = m.topic(),
+                                                partition = m.partition(),
+                                                offset = m.offset(),
+                                                "non-UTF-8 payload, skipping"),
                         }
                     }
                     Some(Err(e)) => tracing::warn!("consumer poll error: {e}"),
@@ -261,14 +254,12 @@ pub async fn run(
                 continue;
             }
 
-            let batch_span = tracing::info_span!(
-                "pipeline.batch",
-                "batch.size" = batch.len() as i64,
-                "batch.eval_ms" = tracing::field::Empty,
-                "batch.txn_ms" = tracing::field::Empty,
-                "kafka.lag" = tracing::field::Empty,
-                "audit.count" = tracing::field::Empty,
-            );
+            let batch_span = tracing::info_span!("pipeline.batch",
+                                                 "batch.size" = batch.len() as i64,
+                                                 "batch.eval_ms" = tracing::field::Empty,
+                                                 "batch.txn_ms" = tracing::field::Empty,
+                                                 "kafka.lag" = tracing::field::Empty,
+                                                 "audit.count" = tracing::field::Empty,);
             let _batch_enter = batch_span.enter();
 
             // ── Phase 1: parallel parse + eval (rayon) ────────────────────────
@@ -276,48 +267,45 @@ pub async fn run(
             let schema_version = config.schema_version;
 
             let eval_start = Instant::now();
-            let msg_evals: Vec<MsgEval> = batch
-                .par_iter()
-                .map(|msg| {
-                    let _parse_span =
+            let msg_evals: Vec<MsgEval> =
+                batch.par_iter()
+                     .map(|msg| {
+                         let _parse_span =
                         tracing::debug_span!("event.parse", "kafka.offset" = msg.offset).entered();
-                    let parse_start = Instant::now();
-                    let event = match rules_core::SourceEvent::from_kafka(
-                        &msg.topic,
-                        msg.partition,
-                        msg.offset,
-                        msg.ts_ms,
-                        &msg.raw,
-                    ) {
-                        Ok(e) => e,
-                        Err(e) => {
-                            tracing::warn!(
-                                topic = %msg.topic, partition = msg.partition,
-                                offset = msg.offset, "parse error: {e}"
-                            );
-                            return MsgEval {
-                                topic: msg.topic.clone(),
-                                partition: msg.partition,
-                                offset: msg.offset,
-                                rule_results: None,
-                            };
-                        }
-                    };
-                    let parse_ns = parse_start.elapsed().as_nanos() as u64;
+                         let parse_start = Instant::now();
+                         let event = match rules_core::SourceEvent::from_kafka(&msg.topic,
+                                                                               msg.partition,
+                                                                               msg.offset,
+                                                                               msg.ts_ms,
+                                                                               &msg.raw)
+                         {
+                             Ok(e) => e,
+                             Err(e) => {
+                                 tracing::warn!(
+                                     topic = %msg.topic, partition = msg.partition,
+                                     offset = msg.offset, "parse error: {e}"
+                                 );
+                                 return MsgEval { topic: msg.topic.clone(),
+                                                  partition: msg.partition,
+                                                  offset: msg.offset,
+                                                  rule_results: None };
+                             }
+                         };
+                         let parse_ns = parse_start.elapsed().as_nanos() as u64;
 
-                    let rule_results = rules
-                        .iter()
-                        .map(|compiled| {
-                            let outcome = eval::evaluate(compiled, &event);
-                            let matched =
-                                outcome.result.audit_type == rules_core::AuditType::Matched;
-                            let routed = if matched {
-                                Some(event.raw.clone())
-                            } else {
-                                None
-                            };
-                            let eval_ns = outcome.eval_time_nano;
-                            let audit = rules_core::AuditRecord {
+                         let rule_results = rules.iter()
+                                                 .map(|compiled| {
+                                                     let outcome = eval::evaluate(compiled, &event);
+                                                     let matched =
+                                                         outcome.result.audit_type
+                                                         == rules_core::AuditType::Matched;
+                                                     let routed = if matched {
+                                                         Some(event.raw.clone())
+                                                     } else {
+                                                         None
+                                                     };
+                                                     let eval_ns = outcome.eval_time_nano;
+                                                     let audit = rules_core::AuditRecord {
                                 audit_id: rules_core::audit_id(
                                     &msg.topic,
                                     msg.partition,
@@ -339,18 +327,16 @@ pub async fn run(
                                 eval_time_nano: eval_ns,
                                 total_time_nano: parse_ns + eval_ns,
                             };
-                            (matched, audit)
-                        })
-                        .collect();
+                                                     (matched, audit)
+                                                 })
+                                                 .collect();
 
-                    MsgEval {
-                        topic: msg.topic.clone(),
-                        partition: msg.partition,
-                        offset: msg.offset,
-                        rule_results: Some(rule_results),
-                    }
-                })
-                .collect();
+                         MsgEval { topic: msg.topic.clone(),
+                                   partition: msg.partition,
+                                   offset: msg.offset,
+                                   rule_results: Some(rule_results) }
+                     })
+                     .collect();
 
             let eval_ms = eval_start.elapsed().as_millis();
             batch_span.record("batch.eval_ms", eval_ms as i64);
@@ -365,8 +351,9 @@ pub async fn run(
                 if let Some(ref results) = ev.rule_results {
                     for (matched, audit) in results {
                         if *matched {
-                            let rec: BaseRecord<str, str> = BaseRecord::to(&config.target_topic)
-                                .payload(audit.source_event.as_str());
+                            let rec: BaseRecord<str, str> =
+                                BaseRecord::to(&config.target_topic).payload(audit.source_event
+                                                                                  .as_str());
                             if let Err((e, _)) = producer.send(rec) {
                                 tracing::warn!("producer send error: {e}");
                             }
@@ -378,11 +365,10 @@ pub async fn run(
             let mut tpl = TopicPartitionList::new();
             for ((topic, partition), offset) in &last_offsets {
                 tpl.add_partition_offset(topic, *partition, Offset::Offset(offset + 1))
-                    .map_err(PipelineError::Kafka)?;
+                   .map_err(PipelineError::Kafka)?;
             }
-            let cgm = consumer
-                .group_metadata()
-                .ok_or(PipelineError::NoGroupMetadata)?;
+            let cgm = consumer.group_metadata()
+                              .ok_or(PipelineError::NoGroupMetadata)?;
             producer.send_offsets_to_transaction(&tpl, &cgm, Duration::from_secs(10))?;
             producer.commit_transaction(Duration::from_secs(10))?;
 
@@ -390,12 +376,11 @@ pub async fn run(
             batch_span.record("batch.txn_ms", txn_ms as i64);
 
             // ── Phase 3: ship audits to ClickHouse (via WAL) ──────────────────
-            let audits: Vec<rules_core::AuditRecord> = msg_evals
-                .into_iter()
-                .filter_map(|ev| ev.rule_results)
-                .flatten()
-                .map(|(_, audit)| audit)
-                .collect();
+            let audits: Vec<rules_core::AuditRecord> = msg_evals.into_iter()
+                                                                .filter_map(|ev| ev.rule_results)
+                                                                .flatten()
+                                                                .map(|(_, audit)| audit)
+                                                                .collect();
 
             let audit_count = audits.len();
             batch_span.record("audit.count", audit_count as i64);
@@ -404,43 +389,38 @@ pub async fn run(
             }
 
             // Compute total consumer lag across all assigned partitions.
-            let lag: i64 = last_offsets
-                .iter()
-                .map(|((topic, partition), committed)| {
-                    consumer
-                        .fetch_watermarks(topic, *partition, Duration::from_millis(200))
-                        .map(|(_low, high)| (high - committed).max(0))
-                        .unwrap_or(0)
-                })
-                .sum();
+            let lag: i64 = last_offsets.iter()
+                                       .map(|((topic, partition), committed)| {
+                                           consumer.fetch_watermarks(topic,
+                                                                     *partition,
+                                                                     Duration::from_millis(200))
+                                                   .map(|(_low, high)| (high - committed).max(0))
+                                                   .unwrap_or(0)
+                                       })
+                                       .sum();
             batch_span.record("kafka.lag", lag);
 
             counters.record_batch(batch.len() as u64, eval_ms as u64, txn_ms as u64, lag);
 
             // ── Phase 4: fire-and-forget lag row to ClickHouse ────────────────
             let ch_backlog = backlog_loop.load(Ordering::Relaxed);
-            counters
-                .ch_backlog_batches
-                .store(ch_backlog, Ordering::Relaxed);
-            let lag_row = LagRow {
-                ts: chrono::Utc::now(),
-                consumer_group: config.consumer_group.clone(),
-                total_lag: lag,
-                ch_backlog_batches: ch_backlog,
-                batch_size: batch.len() as i32,
-                eval_ms: eval_ms as i64,
-                txn_ms: txn_ms as i64,
-            };
+            counters.ch_backlog_batches
+                    .store(ch_backlog, Ordering::Relaxed);
+            let lag_row = LagRow { ts: chrono::Utc::now(),
+                                   consumer_group: config.consumer_group.clone(),
+                                   total_lag: lag,
+                                   ch_backlog_batches: ch_backlog,
+                                   batch_size: batch.len() as i32,
+                                   eval_ms: eval_ms as i64,
+                                   txn_ms: txn_ms as i64 };
             let _ = lag_tx.try_send(lag_row); // non-blocking; loss is acceptable
 
-            tracing::debug!(
-                messages = batch.len(),
-                audits = audit_count,
-                eval_ms,
-                txn_ms,
-                lag,
-                "batch processed"
-            );
+            tracing::debug!(messages = batch.len(),
+                            audits = audit_count,
+                            eval_ms,
+                            txn_ms,
+                            lag,
+                            "batch processed");
         }
     });
 
@@ -468,11 +448,10 @@ fn consumer_all_partitions(consumer: &BaseConsumer, topic: &str) -> TopicPartiti
 /// TCP-connect check for Postgres: parse first host:port from DATABASE_URL.
 /// DATABASE_URL format: postgres://user:pass@host:port/db
 async fn check_postgres_tcp(database_url: &str) -> bool {
-    let host_port = match database_url
-        .split("://")
-        .nth(1)
-        .and_then(|rest| rest.split('@').nth(1))
-        .and_then(|host_db| host_db.split('/').next())
+    let host_port = match database_url.split("://")
+                                      .nth(1)
+                                      .and_then(|rest| rest.split('@').nth(1))
+                                      .and_then(|host_db| host_db.split('/').next())
     {
         Some(hp) => hp,
         None => return false,
@@ -483,11 +462,8 @@ async fn check_postgres_tcp(database_url: &str) -> bool {
         Err(_) => return false,
     };
     for addr in addrs {
-        let result = tokio::time::timeout(
-            Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
-            tokio::net::TcpStream::connect(addr),
-        )
-        .await;
+        let result = tokio::time::timeout(Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+                                          tokio::net::TcpStream::connect(addr)).await;
         if matches!(result, Ok(Ok(_))) {
             return true;
         }
@@ -498,11 +474,8 @@ async fn check_postgres_tcp(database_url: &str) -> bool {
 /// HTTP GET {clickhouse_url}/ping with 2s timeout.
 async fn check_clickhouse_ping(clickhouse_url: &str) -> bool {
     let url = format!("{clickhouse_url}/ping");
-    let result = tokio::time::timeout(
-        Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
-        reqwest::get(&url),
-    )
-    .await;
+    let result = tokio::time::timeout(Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+                                      reqwest::get(&url)).await;
     matches!(result, Ok(Ok(r)) if r.status().is_success())
 }
 
@@ -528,29 +501,23 @@ mod tests {
     fn test_audit_id_uniqueness_by_rule() {
         let id_a = audit_id("events", 0, 10, "rule-A");
         let id_b = audit_id("events", 0, 10, "rule-B");
-        assert_ne!(
-            id_a, id_b,
-            "different rules on the same event must yield distinct audit IDs"
-        );
+        assert_ne!(id_a, id_b,
+                   "different rules on the same event must yield distinct audit IDs");
     }
 
     #[test]
     fn test_audit_id_uniqueness_by_offset() {
         let id_a = audit_id("events", 0, 1, "rule-X");
         let id_b = audit_id("events", 0, 2, "rule-X");
-        assert_ne!(
-            id_a, id_b,
-            "same rule on different offsets must yield distinct audit IDs"
-        );
+        assert_ne!(id_a, id_b,
+                   "same rule on different offsets must yield distinct audit IDs");
     }
 
     #[test]
     fn test_audit_id_uniqueness_by_partition() {
         let id_a = audit_id("events", 0, 5, "rule-X");
         let id_b = audit_id("events", 1, 5, "rule-X");
-        assert_ne!(
-            id_a, id_b,
-            "same rule/offset on different partitions must yield distinct IDs"
-        );
+        assert_ne!(id_a, id_b,
+                   "same rule/offset on different partitions must yield distinct IDs");
     }
 }

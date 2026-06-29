@@ -51,15 +51,13 @@ struct RuleRow {
 /// Convert a database row into the domain Rule.
 impl From<RuleRow> for Rule {
     fn from(row: RuleRow) -> Self {
-        Rule {
-            id: row.id,
-            description: row.description,
-            expression: row.expression,
-            target_topic: row.target_topic,
-            enabled: row.enabled,
-            version: row.version,
-            updated_at: row.updated_at,
-        }
+        Rule { id: row.id,
+               description: row.description,
+               expression: row.expression,
+               target_topic: row.target_topic,
+               enabled: row.enabled,
+               version: row.version,
+               updated_at: row.updated_at }
     }
 }
 
@@ -106,11 +104,10 @@ impl RuleRepository {
         let mut qb = QueryBuilder::new("SELECT ");
         qb.push(RULE_COLS);
         qb.push(" FROM rules WHERE id = $1");
-        let row = qb
-            .build_query_as::<RuleRow>()
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = qb.build_query_as::<RuleRow>()
+                    .bind(id)
+                    .fetch_optional(&self.pool)
+                    .await?;
         Ok(row.map(Rule::from))
     }
 
@@ -118,14 +115,13 @@ impl RuleRepository {
     pub async fn create(&self, input: &RuleInput) -> Result<Rule> {
         let mut qb = QueryBuilder::new("INSERT INTO rules (description, expression, target_topic, enabled) VALUES ($1, $2, $3, $4) RETURNING ");
         qb.push(RULE_COLS);
-        let row = qb
-            .build_query_as::<RuleRow>()
-            .bind(&input.description)
-            .bind(&input.expression)
-            .bind(&input.target_topic)
-            .bind(input.enabled)
-            .fetch_one(&self.pool)
-            .await?;
+        let row = qb.build_query_as::<RuleRow>()
+                    .bind(&input.description)
+                    .bind(&input.expression)
+                    .bind(&input.target_topic)
+                    .bind(input.enabled)
+                    .fetch_one(&self.pool)
+                    .await?;
         Ok(Rule::from(row))
     }
 
@@ -133,24 +129,22 @@ impl RuleRepository {
     pub async fn update(&self, id: &str, input: &RuleInput) -> Result<Option<Rule>> {
         let mut qb = QueryBuilder::new("UPDATE rules SET description=$2, expression=$3, target_topic=$4, enabled=$5, version=version+1, updated_at=now() WHERE id=$1 RETURNING ");
         qb.push(RULE_COLS);
-        let row = qb
-            .build_query_as::<RuleRow>()
-            .bind(id)
-            .bind(&input.description)
-            .bind(&input.expression)
-            .bind(&input.target_topic)
-            .bind(input.enabled)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = qb.build_query_as::<RuleRow>()
+                    .bind(id)
+                    .bind(&input.description)
+                    .bind(&input.expression)
+                    .bind(&input.target_topic)
+                    .bind(input.enabled)
+                    .fetch_optional(&self.pool)
+                    .await?;
         Ok(row.map(Rule::from))
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn delete(&self, id: &str) -> Result<bool> {
-        let result = query("DELETE FROM rules WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        let result = query("DELETE FROM rules WHERE id = $1").bind(id)
+                                                             .execute(&self.pool)
+                                                             .await?;
         Ok(result.rows_affected() > 0)
     }
 }

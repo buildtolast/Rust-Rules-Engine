@@ -23,15 +23,13 @@ impl Default for PipelineCounters {
 
 impl PipelineCounters {
     pub fn new() -> Self {
-        Self {
-            messages_total: AtomicU64::new(0),
-            batches_total: AtomicU64::new(0),
-            eval_ms_total: AtomicU64::new(0),
-            txn_ms_total: AtomicU64::new(0),
-            consumer_lag: AtomicI64::new(0),
-            ch_backlog_batches: AtomicI32::new(0),
-            started_at: Instant::now(),
-        }
+        Self { messages_total: AtomicU64::new(0),
+               batches_total: AtomicU64::new(0),
+               eval_ms_total: AtomicU64::new(0),
+               txn_ms_total: AtomicU64::new(0),
+               consumer_lag: AtomicI64::new(0),
+               ch_backlog_batches: AtomicI32::new(0),
+               started_at: Instant::now() }
     }
 
     pub fn record_batch(&self, messages: u64, eval_ms: u64, txn_ms: u64, lag: i64) {

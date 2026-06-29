@@ -71,15 +71,13 @@ pub struct SreState {
 
 impl SreState {
     fn new() -> Self {
-        Self {
-            containers: Vec::new(),
-            findings: VecDeque::new(),
-            last_scan_at: None,
-            llm_available: false,
-            last_probe: None,
-            weakest_link: None,
-            last_weakest_link_at: None,
-        }
+        Self { containers: Vec::new(),
+               findings: VecDeque::new(),
+               last_scan_at: None,
+               llm_available: false,
+               last_probe: None,
+               weakest_link: None,
+               last_weakest_link_at: None }
     }
 
     fn push_finding(&mut self, f: Finding) {
@@ -93,11 +91,10 @@ impl SreState {
 // ── ClickHouse client ───────────────────────────────────────────────────────
 
 fn ch_client(cfg: &SreConfig) -> Client {
-    Client::default()
-        .with_url(&cfg.clickhouse_url)
-        .with_database(&cfg.clickhouse_db)
-        .with_user(&cfg.clickhouse_user)
-        .with_password(&cfg.clickhouse_pass)
+    Client::default().with_url(&cfg.clickhouse_url)
+                     .with_database(&cfg.clickhouse_db)
+                     .with_user(&cfg.clickhouse_user)
+                     .with_password(&cfg.clickhouse_pass)
 }
 
 const MIGRATION_SRE: &str =
@@ -129,14 +126,12 @@ struct ScanCtx<'a> {
     tuner: &'a Arc<auto_tune::AutoTuner>,
 }
 
-async fn scan_once(
-    docker: &bollard::Docker,
-    llm: &AnalysisClient,
-    store: &mut SreStore,
-    state: &Arc<RwLock<SreState>>,
-    tx: &broadcast::Sender<Finding>,
-    ctx: &ScanCtx<'_>,
-) {
+async fn scan_once(docker: &bollard::Docker,
+                   llm: &AnalysisClient,
+                   store: &mut SreStore,
+                   state: &Arc<RwLock<SreState>>,
+                   tx: &broadcast::Sender<Finding>,
+                   ctx: &ScanCtx<'_>) {
     let cfg = ctx.cfg;
     let ch = ctx.ch;
     let tuner = ctx.tuner;
@@ -154,44 +149,40 @@ async fn scan_once(
 
     // Fetch stats for all running containers concurrently (one_shot=false blocks ~1s each).
     {
-        let active: Vec<_> = containers
-            .iter()
-            .filter(|c| !is_one_shot_by_name(&c.name))
-            .collect();
+        let active: Vec<_> = containers.iter()
+                                       .filter(|c| !is_one_shot_by_name(&c.name))
+                                       .collect();
 
-        let stats_futs = active.iter().map(|c| {
-            let docker = docker.clone();
-            let id = c.id.clone();
-            async move {
-                if c.running {
-                    docker::fetch_stats(&docker, &id)
-                        .await
-                        .unwrap_or((0.0, 0, 0))
-                } else {
-                    (0.0, 0, 0)
-                }
-            }
-        });
+        let stats_futs =
+            active.iter().map(|c| {
+                             let docker = docker.clone();
+                             let id = c.id.clone();
+                             async move {
+                                 if c.running {
+                                     docker::fetch_stats(&docker, &id).await
+                                                                      .unwrap_or((0.0, 0, 0))
+                                 } else {
+                                     (0.0, 0, 0)
+                                 }
+                             }
+                         });
         let all_stats: Vec<_> = futures_util::future::join_all(stats_futs).await;
 
-        let statuses = active
-            .iter()
-            .zip(all_stats)
-            .map(
-                |(c, (cpu_percent, mem_used_bytes, mem_limit_bytes))| ContainerStatus {
-                    name: c.name.clone(),
-                    id: c.id.clone(),
-                    running: c.running,
-                    started_at: c.started_at,
-                    health: c.health.clone(),
-                    last_checked_at: Utc::now(),
-                    last_severity: None,
-                    cpu_percent,
-                    mem_used_bytes,
-                    mem_limit_bytes,
-                },
-            )
-            .collect();
+        let statuses = active.iter()
+                             .zip(all_stats)
+                             .map(|(c, (cpu_percent, mem_used_bytes, mem_limit_bytes))| {
+                                 ContainerStatus { name: c.name.clone(),
+                                                   id: c.id.clone(),
+                                                   running: c.running,
+                                                   started_at: c.started_at,
+                                                   health: c.health.clone(),
+                                                   last_checked_at: Utc::now(),
+                                                   last_severity: None,
+                                                   cpu_percent,
+                                                   mem_used_bytes,
+                                                   mem_limit_bytes }
+                             })
+                             .collect();
 
         let mut st = state.write().await;
         st.containers = statuses;
@@ -222,23 +213,20 @@ async fn scan_once(
             let used_mb = cs.mem_used_bytes / 1_048_576;
             let limit_mb = cs.mem_limit_bytes / 1_048_576;
             let suggested_mb = (cs.mem_used_bytes as f64 / 0.4) as u64 / 1_048_576;
-            let finding =
-                analysis::Finding {
-                    severity: severity.to_string(),
-                    category: "resource_pressure".to_string(),
-                    finding: format!(
+            let finding = analysis::Finding { severity: severity.to_string(),
+                                              category: "resource_pressure".to_string(),
+                                              finding: format!(
                     "Memory usage is {:.1}% ({} MB / {} MB) — above the 60% advisory threshold.",
                     pct, used_mb, limit_mb
                 ),
-                    proposed_fix: format!(
+                                              proposed_fix: format!(
                     "Increase the memory limit for {} to ~{} MB so current usage stays below 40%. \
                      Update the relevant *_MEM_LIMIT env var in docker-compose.yml and run \
                      `docker compose up -d --no-deps {}`.",
                     cs.name, suggested_mb, cs.name.trim_start_matches("rre-")
                 ),
-                    container_name: cs.name.clone(),
-                    observed_at: Some(Utc::now()),
-                };
+                                              container_name: cs.name.clone(),
+                                              observed_at: Some(Utc::now()) };
             let hash = sha256_hex(&format!("{}:mem:{:.0}", cs.name, pct / 5.0 * 5.0));
             if !store.is_unchanged(&cs.name, &hash) {
                 store.record_hash(&cs.name, &hash);
@@ -281,23 +269,20 @@ async fn scan_once(
     let weakest_link_due = {
         let st = state.read().await;
         st.last_weakest_link_at
-            .map(|t| Utc::now().signed_duration_since(t).num_seconds() >= 60)
-            .unwrap_or(true)
+          .map(|t| Utc::now().signed_duration_since(t).num_seconds() >= 60)
+          .unwrap_or(true)
     };
     if (total_lag > 0 || any_service_down) && weakest_link_due {
         let recent_findings: Vec<Finding> = {
             let st = state.read().await;
             st.findings.iter().cloned().collect()
         };
-        let decision = llm
-            .decide_weakest_link(
-                &probe_result,
-                total_lag,
-                &lag_trend,
-                ch_backlog_batches,
-                &recent_findings,
-            )
-            .await;
+        let decision = llm.decide_weakest_link(&probe_result,
+                                               total_lag,
+                                               &lag_trend,
+                                               ch_backlog_batches,
+                                               &recent_findings)
+                          .await;
 
         let mut st = state.write().await;
         st.weakest_link = decision;
@@ -308,27 +293,25 @@ async fn scan_once(
 /// Keep only WARN/ERROR/CRITICAL log lines — INFO and DEBUG are noise for SRE analysis.
 fn filter_noisy_logs(raw: &str) -> String {
     raw.lines()
-        .filter(|l| {
-            let u = l.to_ascii_uppercase();
-            u.contains("WARN")
-                || u.contains("ERROR")
-                || u.contains("CRITICAL")
-                || u.contains("FATAL")
-                || u.contains("PANIC")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+       .filter(|l| {
+           let u = l.to_ascii_uppercase();
+           u.contains("WARN")
+           || u.contains("ERROR")
+           || u.contains("CRITICAL")
+           || u.contains("FATAL")
+           || u.contains("PANIC")
+       })
+       .collect::<Vec<_>>()
+       .join("\n")
 }
 
-async fn analyze_container(
-    c: &ContainerInfo,
-    docker: &bollard::Docker,
-    llm: &AnalysisClient,
-    store: &mut SreStore,
-    state: &Arc<RwLock<SreState>>,
-    tx: &broadcast::Sender<Finding>,
-    cfg: &SreConfig,
-) {
+async fn analyze_container(c: &ContainerInfo,
+                           docker: &bollard::Docker,
+                           llm: &AnalysisClient,
+                           store: &mut SreStore,
+                           state: &Arc<RwLock<SreState>>,
+                           tx: &broadcast::Sender<Finding>,
+                           cfg: &SreConfig) {
     if c.one_shot && c.exit_code == Some(0) {
         return;
     }
@@ -356,10 +339,8 @@ async fn analyze_container(
             // Auto-restart if enabled and not on cooldown.
             let restarted = if cfg.auto_restart {
                 if store.is_restart_on_cooldown(&c.name, cfg.restart_cooldown_secs) {
-                    info!(
-                        "auto-restart suppressed for {} (cooldown {}s)",
-                        c.name, cfg.restart_cooldown_secs
-                    );
+                    info!("auto-restart suppressed for {} (cooldown {}s)",
+                          c.name, cfg.restart_cooldown_secs);
                     false
                 } else {
                     match docker::restart_container(docker, &c.id).await {
@@ -379,36 +360,30 @@ async fn analyze_container(
             };
 
             let fix = if restarted {
-                format!(
-                    "Container {} was automatically restarted by the SRE agent.",
-                    c.name
-                )
+                format!("Container {} was automatically restarted by the SRE agent.",
+                        c.name)
             } else {
                 format!("Restart with: docker start {}", c.name)
             };
 
-            let finding = Finding {
-                severity: "CRITICAL".into(),
-                category: "crash_loop".into(),
-                finding: format!(
+            let finding = Finding { severity: "CRITICAL".into(),
+                                    category: "crash_loop".into(),
+                                    finding: format!(
                     "Container {} is not running (exited/stopped). Service is down.",
                     c.name
                 ),
-                proposed_fix: fix,
-                container_name: c.name.clone(),
-                observed_at: Some(Utc::now()),
-            };
+                                    proposed_fix: fix,
+                                    container_name: c.name.clone(),
+                                    observed_at: Some(Utc::now()) };
 
-            let obs = store::SreObservation {
-                observed_at: Utc::now(),
-                container_name: c.name.clone(),
-                severity: finding.severity.clone(),
-                category: finding.category.clone(),
-                finding: finding.finding.clone(),
-                proposed_fix: finding.proposed_fix.clone(),
-                log_window_hash: hash,
-                log_snippet: String::new(),
-            };
+            let obs = store::SreObservation { observed_at: Utc::now(),
+                                              container_name: c.name.clone(),
+                                              severity: finding.severity.clone(),
+                                              category: finding.category.clone(),
+                                              finding: finding.finding.clone(),
+                                              proposed_fix: finding.proposed_fix.clone(),
+                                              log_window_hash: hash,
+                                              log_snippet: String::new() };
             if let Err(e) = store.write(&obs).await {
                 error!("SreStore write error: {e}");
             }
@@ -475,16 +450,14 @@ async fn analyze_container(
     store.record_hash(&c.name, &hash);
     store.record_severity(&c.name, &finding.severity);
 
-    let obs = SreObservation {
-        observed_at: Utc::now(),
-        container_name: c.name.clone(),
-        severity: finding.severity.clone(),
-        category: finding.category.clone(),
-        finding: finding.finding.clone(),
-        proposed_fix: finding.proposed_fix.clone(),
-        log_window_hash: hash,
-        log_snippet: snippet,
-    };
+    let obs = SreObservation { observed_at: Utc::now(),
+                               container_name: c.name.clone(),
+                               severity: finding.severity.clone(),
+                               category: finding.category.clone(),
+                               finding: finding.finding.clone(),
+                               proposed_fix: finding.proposed_fix.clone(),
+                               log_window_hash: hash,
+                               log_snippet: snippet };
 
     if let Err(e) = store.write(&obs).await {
         error!("SreStore write error: {e}");
@@ -501,36 +474,27 @@ async fn analyze_container(
     let _ = tx.send(finding);
 }
 
-async fn analysis_loop(
-    docker: bollard::Docker,
-    llm: AnalysisClient,
-    state: Arc<RwLock<SreState>>,
-    tx: broadcast::Sender<Finding>,
-    cfg: Arc<SreConfig>,
-) {
+async fn analysis_loop(docker: bollard::Docker,
+                       llm: AnalysisClient,
+                       state: Arc<RwLock<SreState>>,
+                       tx: broadcast::Sender<Finding>,
+                       cfg: Arc<SreConfig>) {
     let ch = ch_client(&cfg);
     let mut store = SreStore::new(&ch);
-    let tuner = Arc::new(auto_tune::AutoTuner::new(
-        cfg.auto_tune,
-        cfg.auto_tune_compose_file.clone(),
-        cfg.auto_tune_env_file.clone(),
-        cfg.auto_tune_cooldown_secs,
-    ));
+    let tuner = Arc::new(auto_tune::AutoTuner::new(cfg.auto_tune,
+                                                   cfg.auto_tune_compose_file.clone(),
+                                                   cfg.auto_tune_env_file.clone(),
+                                                   cfg.auto_tune_cooldown_secs));
 
     loop {
-        scan_once(
-            &docker,
-            &llm,
-            &mut store,
-            &state,
-            &tx,
-            &ScanCtx {
-                ch: &ch,
-                cfg: &cfg,
-                tuner: &tuner,
-            },
-        )
-        .await;
+        scan_once(&docker,
+                  &llm,
+                  &mut store,
+                  &state,
+                  &tx,
+                  &ScanCtx { ch: &ch,
+                             cfg: &cfg,
+                             tuner: &tuner }).await;
         tokio::time::sleep(cfg.scan_interval).await;
     }
 }
@@ -554,12 +518,10 @@ pub async fn run(cfg: SreConfig) -> anyhow::Result<()> {
     let (tx, _rx) = broadcast::channel::<Finding>(256);
 
     // Build analysis client
-    let llm = AnalysisClient::new(
-        &cfg.llm_base_url,
-        &cfg.llm_model,
-        cfg.llm_api_key.clone(),
-        cfg.llm_timeout_secs,
-    );
+    let llm = AnalysisClient::new(&cfg.llm_base_url,
+                                  &cfg.llm_model,
+                                  cfg.llm_api_key.clone(),
+                                  cfg.llm_timeout_secs);
 
     // Spawn analysis loop
     let dash_llm = llm.clone();

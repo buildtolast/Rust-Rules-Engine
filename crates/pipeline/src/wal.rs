@@ -23,19 +23,17 @@ const WAL_PATH_ENV: &str = "CH_WAL_PATH";
 const WAL_PATH_DEFAULT: &str = "/data/ch-audit.wal";
 
 fn wal_path() -> PathBuf {
-    std::env::var(WAL_PATH_ENV)
-        .unwrap_or_else(|_| WAL_PATH_DEFAULT.to_owned())
-        .into()
+    std::env::var(WAL_PATH_ENV).unwrap_or_else(|_| WAL_PATH_DEFAULT.to_owned())
+                               .into()
 }
 
 /// Open or create the WAL file for append + read.
 /// Returns `None` if the path cannot be created (logs error, does not panic).
 fn open_wal(path: &PathBuf) -> Option<File> {
-    match OpenOptions::new()
-        .create(true)
-        .read(true)
-        .append(true)
-        .open(path)
+    match OpenOptions::new().create(true)
+                            .read(true)
+                            .append(true)
+                            .open(path)
     {
         Ok(f) => Some(f),
         Err(e) => {
@@ -111,11 +109,9 @@ fn append_batch(file: &mut File, batch: &[AuditRecord]) {
 
 /// Receive audit batches from the pipeline, WAL-back them, and write to ClickHouse
 /// with exponential-backoff retries. Runs indefinitely until the sender is dropped.
-pub async fn run_writer(
-    mut ch_rx: tokio::sync::mpsc::Receiver<Vec<AuditRecord>>,
-    ch_cfg: ClickHouseConfig,
-    backlog: Arc<AtomicI32>,
-) {
+pub async fn run_writer(mut ch_rx: tokio::sync::mpsc::Receiver<Vec<AuditRecord>>,
+                        ch_cfg: ClickHouseConfig,
+                        backlog: Arc<AtomicI32>) {
     let path = wal_path();
     let mut wal_file: Option<File> = open_wal(&path);
 
@@ -125,10 +121,8 @@ pub async fn run_writer(
     if let Some(ref mut f) = wal_file {
         let batches = read_batches(f);
         if !batches.is_empty() {
-            tracing::info!(
-                count = batches.len(),
-                "replaying WAL batches from previous run"
-            );
+            tracing::info!(count = batches.len(),
+                           "replaying WAL batches from previous run");
             for batch in batches {
                 backlog.fetch_add(1, Relaxed);
                 write_with_backoff(&client, &ch_cfg, &batch).await;
@@ -157,11 +151,9 @@ pub async fn run_writer(
     // batch is fully written before the loop advances).
 }
 
-async fn write_with_backoff(
-    client: &store_clickhouse::ClickHouseClient,
-    ch_cfg: &ClickHouseConfig,
-    batch: &[AuditRecord],
-) {
+async fn write_with_backoff(client: &store_clickhouse::ClickHouseClient,
+                            ch_cfg: &ClickHouseConfig,
+                            batch: &[AuditRecord]) {
     let mut delay_secs: u64 = 1;
     loop {
         let mut writer = AuditWriter::new(client, ch_cfg);
@@ -172,10 +164,8 @@ async fn write_with_backoff(
         match result.await {
             Ok(()) => return,
             Err(e) => {
-                tracing::warn!(
-                    delay_secs,
-                    "ClickHouse write failed: {e} — retrying in {delay_secs}s"
-                );
+                tracing::warn!(delay_secs,
+                               "ClickHouse write failed: {e} — retrying in {delay_secs}s");
                 tokio::time::sleep(Duration::from_secs(delay_secs)).await;
                 delay_secs = (delay_secs * 2).min(60);
             }
@@ -192,22 +182,20 @@ mod tests {
     use std::path::PathBuf;
 
     fn make_record(id: &str) -> AuditRecord {
-        AuditRecord {
-            audit_id: id.to_owned(),
-            rule_id: "r1".to_owned(),
-            schema_version: 1,
-            audit_type: AuditType::Matched,
-            reason: None,
-            source_event: "{}".to_owned(),
-            routed_event: None,
-            source_topic: "src".to_owned(),
-            partition: 0,
-            offset: 0,
-            timestamp: Utc::now(),
-            parse_time_nano: 0,
-            eval_time_nano: 0,
-            total_time_nano: 0,
-        }
+        AuditRecord { audit_id: id.to_owned(),
+                      rule_id: "r1".to_owned(),
+                      schema_version: 1,
+                      audit_type: AuditType::Matched,
+                      reason: None,
+                      source_event: "{}".to_owned(),
+                      routed_event: None,
+                      source_topic: "src".to_owned(),
+                      partition: 0,
+                      offset: 0,
+                      timestamp: Utc::now(),
+                      parse_time_nano: 0,
+                      eval_time_nano: 0,
+                      total_time_nano: 0 }
     }
 
     fn tmp_path(suffix: &str) -> PathBuf {
@@ -215,12 +203,11 @@ mod tests {
     }
 
     fn open_rw(path: &PathBuf) -> std::fs::File {
-        std::fs::OpenOptions::new()
-            .create(true)
-            .read(true)
-            .append(true)
-            .open(path)
-            .unwrap()
+        std::fs::OpenOptions::new().create(true)
+                                   .read(true)
+                                   .append(true)
+                                   .open(path)
+                                   .unwrap()
     }
 
     #[test]

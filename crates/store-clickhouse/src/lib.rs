@@ -31,23 +31,20 @@ pub struct ClickHouseConfig {
 
 impl Default for ClickHouseConfig {
     fn default() -> Self {
-        Self {
-            url: "http://localhost:8123".into(),
-            database: "ruleaudit".into(),
-            user: "rules".into(),
-            password: "rules".into(),
-            batch_max_rows: 500,
-            batch_period_ms: 200,
-        }
+        Self { url: "http://localhost:8123".into(),
+               database: "ruleaudit".into(),
+               user: "rules".into(),
+               password: "rules".into(),
+               batch_max_rows: 500,
+               batch_period_ms: 200 }
     }
 }
 
 pub fn client(cfg: &ClickHouseConfig) -> Client {
-    Client::default()
-        .with_url(&cfg.url)
-        .with_database(&cfg.database)
-        .with_user(&cfg.user)
-        .with_password(&cfg.password)
+    Client::default().with_url(&cfg.url)
+                     .with_database(&cfg.database)
+                     .with_user(&cfg.user)
+                     .with_password(&cfg.password)
 }
 
 pub async fn ping(client: &Client) -> bool {
@@ -109,22 +106,20 @@ pub struct AuditRow {
 
 impl AuditRow {
     pub fn from_record(rec: &AuditRecord) -> Self {
-        Self {
-            audit_id: rec.audit_id.clone(),
-            rule_id: rec.rule_id.clone(),
-            schema_version: rec.schema_version,
-            audit_type: audit_type_str(rec.audit_type).to_string(),
-            reason: rec.reason.clone().unwrap_or_default(),
-            source_event: rec.source_event.clone(),
-            routed_event: rec.routed_event.clone().unwrap_or_default(),
-            source_topic: rec.source_topic.clone(),
-            partition: rec.partition,
-            offset: rec.offset,
-            timestamp: rec.timestamp,
-            parse_time_nano: rec.parse_time_nano,
-            eval_time_nano: rec.eval_time_nano,
-            total_time_nano: rec.total_time_nano,
-        }
+        Self { audit_id: rec.audit_id.clone(),
+               rule_id: rec.rule_id.clone(),
+               schema_version: rec.schema_version,
+               audit_type: audit_type_str(rec.audit_type).to_string(),
+               reason: rec.reason.clone().unwrap_or_default(),
+               source_event: rec.source_event.clone(),
+               routed_event: rec.routed_event.clone().unwrap_or_default(),
+               source_topic: rec.source_topic.clone(),
+               partition: rec.partition,
+               offset: rec.offset,
+               timestamp: rec.timestamp,
+               parse_time_nano: rec.parse_time_nano,
+               eval_time_nano: rec.eval_time_nano,
+               total_time_nano: rec.total_time_nano }
     }
 }
 
@@ -136,11 +131,9 @@ pub struct AuditWriter {
 
 impl AuditWriter {
     pub fn new(client: &Client, cfg: &ClickHouseConfig) -> Self {
-        Self {
-            client: client.clone(),
-            buffer: Vec::with_capacity(cfg.batch_max_rows as usize),
-            batch_max: cfg.batch_max_rows as usize,
-        }
+        Self { client: client.clone(),
+               buffer: Vec::with_capacity(cfg.batch_max_rows as usize),
+               batch_max: cfg.batch_max_rows as usize }
     }
 
     /// Buffer a single record; flushes automatically when the buffer is full.

@@ -14,10 +14,9 @@ pub struct StatsQuery {
     to: Option<DateTime<Utc>>,
 }
 
-pub async fn stats(
-    State(s): State<AppState>,
-    Query(q): Query<StatsQuery>,
-) -> Result<Json<AnalyticsStats>, ApiError> {
+pub async fn stats(State(s): State<AppState>,
+                   Query(q): Query<StatsQuery>)
+                   -> Result<Json<AnalyticsStats>, ApiError> {
     let to = q.to.unwrap_or_else(Utc::now);
     let from = q.from.unwrap_or_else(|| to - Duration::hours(24));
     let result = store_clickhouse::query_analytics(&s.ch_client, from, to).await?;

@@ -56,31 +56,27 @@ pub struct AuditRecordOut {
 
 impl From<AuditQueryRow> for AuditRecordOut {
     fn from(r: AuditQueryRow) -> Self {
-        let ts = chrono::DateTime::from_timestamp(r.timestamp_secs as i64, 0)
-            .unwrap_or_default()
-            .to_rfc3339();
-        Self {
-            audit_id: r.audit_id,
-            rule_id: r.rule_id,
-            audit_type: r.audit_type,
-            reason: r.reason,
-            source_event: r.source_event,
-            routed_event: r.routed_event,
-            source_topic: r.source_topic,
-            partition: r.partition,
-            offset: r.offset,
-            timestamp: ts,
-            parse_time_nano: r.parse_time_nano,
-            eval_time_nano: r.eval_time_nano,
-            total_time_nano: r.total_time_nano,
-        }
+        let ts = chrono::DateTime::from_timestamp(r.timestamp_secs as i64, 0).unwrap_or_default()
+                                                                             .to_rfc3339();
+        Self { audit_id: r.audit_id,
+               rule_id: r.rule_id,
+               audit_type: r.audit_type,
+               reason: r.reason,
+               source_event: r.source_event,
+               routed_event: r.routed_event,
+               source_topic: r.source_topic,
+               partition: r.partition,
+               offset: r.offset,
+               timestamp: ts,
+               parse_time_nano: r.parse_time_nano,
+               eval_time_nano: r.eval_time_nano,
+               total_time_nano: r.total_time_nano }
     }
 }
 
-pub async fn top(
-    State(s): State<AppState>,
-    Query(q): Query<TopQuery>,
-) -> Result<Json<Vec<AuditRecordOut>>, ApiError> {
+pub async fn top(State(s): State<AppState>,
+                 Query(q): Query<TopQuery>)
+                 -> Result<Json<Vec<AuditRecordOut>>, ApiError> {
     let to = q.to.unwrap_or_else(Utc::now);
     let from = q.from.unwrap_or_else(|| to - Duration::hours(24));
     let limit = q.limit.min(100);
@@ -151,10 +147,9 @@ const CSV_HEADER_META: &str = "audit_id,rule_id,audit_type,reason,source_topic,p
 const CSV_HEADER_FULL: &str = "audit_id,rule_id,audit_type,reason,source_topic,partition,offset,\
      timestamp,parse_time_nano,eval_time_nano,total_time_nano,source_event,routed_event\n";
 
-pub async fn export(
-    State(s): State<AppState>,
-    Query(q): Query<ExportQuery>,
-) -> Result<Response, ApiError> {
+pub async fn export(State(s): State<AppState>,
+                    Query(q): Query<ExportQuery>)
+                    -> Result<Response, ApiError> {
     // Validate audit_type against the known enum values.
     let ch_type = match q.audit_type.to_uppercase().as_str() {
         "MATCHED" => "MATCHED",
@@ -169,8 +164,9 @@ pub async fn export(
 
     // Validate rule_id as a UUID to prevent injection before interpolation.
     if let Some(ref rid) = q.rule_id {
-        uuid::Uuid::parse_str(rid)
-            .map_err(|_| ApiError::BadRequest("rule_id must be a valid UUID".into()))?;
+        uuid::Uuid::parse_str(rid).map_err(|_| {
+                                      ApiError::BadRequest("rule_id must be a valid UUID".into())
+                                  })?;
     }
 
     let to = q.to.unwrap_or_else(Utc::now);
@@ -178,11 +174,10 @@ pub async fn export(
     let from_ts = from.timestamp() as u32;
     let to_ts = to.timestamp() as u32;
 
-    let rule_clause = q
-        .rule_id
-        .as_deref()
-        .map(|rid| format!("AND rule_id = '{rid}'"))
-        .unwrap_or_default();
+    let rule_clause = q.rule_id
+                       .as_deref()
+                       .map(|rid| format!("AND rule_id = '{rid}'"))
+                       .unwrap_or_default();
 
     let limit = q.limit.min(10_000_000);
     let include_events = q.include_events;
@@ -198,7 +193,7 @@ pub async fn export(
     // which is a consistent ordering suitable for a CSV download.
     // max_memory_usage caps per-query RAM so a large export cannot OOM the server.
     let sql = format!(
-        "SELECT audit_id, rule_id, audit_type, reason, source_topic, \
+                      "SELECT audit_id, rule_id, audit_type, reason, source_topic, \
          partition, offset, toUnixTimestamp(timestamp) AS timestamp_secs, \
          parse_time_nano, eval_time_nano, total_time_nano{event_cols} \
          FROM audits \
@@ -216,33 +211,30 @@ pub async fn export(
         let header = futures::stream::once(std::future::ready(Ok::<Bytes, std::io::Error>(
             Bytes::from(CSV_HEADER_FULL),
         )));
-        let cursor = s
-            .ch_client
-            .query(&sql)
-            .fetch::<ExportRowFull>()
-            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        let cursor = s.ch_client
+                      .query(&sql)
+                      .fetch::<ExportRowFull>()
+                      .map_err(|e| ApiError::BadRequest(e.to_string()))?;
         let rows = futures::stream::unfold(cursor, |mut cursor| async move {
             match cursor.next().await {
                 Ok(Some(row)) => {
-                    let ts = DateTime::from_timestamp(row.timestamp_secs as i64, 0)
-                        .unwrap_or_default()
-                        .to_rfc3339();
-                    let line = format!(
-                        "{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
-                        row.audit_id,
-                        row.rule_id,
-                        row.audit_type,
-                        csv_escape(&row.reason),
-                        row.source_topic,
-                        row.partition,
-                        row.offset,
-                        ts,
-                        row.parse_time_nano,
-                        row.eval_time_nano,
-                        row.total_time_nano,
-                        csv_escape(&row.source_event),
-                        csv_escape(&row.routed_event),
-                    );
+                    let ts =
+                        DateTime::from_timestamp(row.timestamp_secs as i64, 0).unwrap_or_default()
+                                                                              .to_rfc3339();
+                    let line = format!("{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+                                       row.audit_id,
+                                       row.rule_id,
+                                       row.audit_type,
+                                       csv_escape(&row.reason),
+                                       row.source_topic,
+                                       row.partition,
+                                       row.offset,
+                                       ts,
+                                       row.parse_time_nano,
+                                       row.eval_time_nano,
+                                       row.total_time_nano,
+                                       csv_escape(&row.source_event),
+                                       csv_escape(&row.routed_event),);
                     Some((Ok::<Bytes, std::io::Error>(Bytes::from(line)), cursor))
                 }
                 Ok(None) => None,
@@ -257,31 +249,28 @@ pub async fn export(
         let header = futures::stream::once(std::future::ready(Ok::<Bytes, std::io::Error>(
             Bytes::from(CSV_HEADER_META),
         )));
-        let cursor = s
-            .ch_client
-            .query(&sql)
-            .fetch::<ExportRowMeta>()
-            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        let cursor = s.ch_client
+                      .query(&sql)
+                      .fetch::<ExportRowMeta>()
+                      .map_err(|e| ApiError::BadRequest(e.to_string()))?;
         let rows = futures::stream::unfold(cursor, |mut cursor| async move {
             match cursor.next().await {
                 Ok(Some(row)) => {
-                    let ts = DateTime::from_timestamp(row.timestamp_secs as i64, 0)
-                        .unwrap_or_default()
-                        .to_rfc3339();
-                    let line = format!(
-                        "{},{},{},{},{},{},{},{},{},{},{}\n",
-                        row.audit_id,
-                        row.rule_id,
-                        row.audit_type,
-                        csv_escape(&row.reason),
-                        row.source_topic,
-                        row.partition,
-                        row.offset,
-                        ts,
-                        row.parse_time_nano,
-                        row.eval_time_nano,
-                        row.total_time_nano,
-                    );
+                    let ts =
+                        DateTime::from_timestamp(row.timestamp_secs as i64, 0).unwrap_or_default()
+                                                                              .to_rfc3339();
+                    let line = format!("{},{},{},{},{},{},{},{},{},{},{}\n",
+                                       row.audit_id,
+                                       row.rule_id,
+                                       row.audit_type,
+                                       csv_escape(&row.reason),
+                                       row.source_topic,
+                                       row.partition,
+                                       row.offset,
+                                       ts,
+                                       row.parse_time_nano,
+                                       row.eval_time_nano,
+                                       row.total_time_nano,);
                     Some((Ok::<Bytes, std::io::Error>(Bytes::from(line)), cursor))
                 }
                 Ok(None) => None,
@@ -294,21 +283,16 @@ pub async fn export(
         Body::from_stream(header.chain(rows))
     };
 
-    let filename = format!(
-        "audit-{}-{}-{}.csv",
-        ch_type.to_lowercase(),
-        from.format("%Y%m%dT%H%M%S"),
-        to.format("%Y%m%dT%H%M%S"),
-    );
+    let filename = format!("audit-{}-{}-{}.csv",
+                           ch_type.to_lowercase(),
+                           from.format("%Y%m%dT%H%M%S"),
+                           to.format("%Y%m%dT%H%M%S"),);
 
-    Ok(Response::builder()
-        .header("content-type", "text/csv; charset=utf-8")
-        .header(
-            "content-disposition",
-            format!("attachment; filename=\"{filename}\""),
-        )
-        .body(body)
-        .unwrap())
+    Ok(Response::builder().header("content-type", "text/csv; charset=utf-8")
+                          .header("content-disposition",
+                                  format!("attachment; filename=\"{filename}\""))
+                          .body(body)
+                          .unwrap())
 }
 
 // RFC 4180 CSV escaping: wrap in quotes if the value contains commas, quotes, or newlines.

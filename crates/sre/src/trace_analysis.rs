@@ -49,7 +49,7 @@ const WINDOW_MINUTES: u32 = 10;
 
 async fn query_rule_perf(ch: &Client) -> anyhow::Result<Vec<RulePerf>> {
     let sql = format!(
-        r"SELECT
+                      r"SELECT
             rule_id,
             count()                                                  AS eval_count,
             round(avg(eval_time_nano) / 1e6, 3)                     AS avg_eval_ms,
@@ -65,9 +65,9 @@ async fn query_rule_perf(ch: &Client) -> anyhow::Result<Vec<RulePerf>> {
     );
 
     ch.query(&sql)
-        .fetch_all::<RulePerf>()
-        .await
-        .map_err(|e| anyhow::anyhow!("ClickHouse query error: {e}"))
+      .fetch_all::<RulePerf>()
+      .await
+      .map_err(|e| anyhow::anyhow!("ClickHouse query error: {e}"))
 }
 
 // ── LLM prompt ────────────────────────────────────────────────────────────────
@@ -77,11 +77,10 @@ fn build_prompt(rule_perf: &[RulePerf]) -> String {
     let overall_avg = if total_evals == 0 {
         0.0
     } else {
-        rule_perf
-            .iter()
-            .map(|r| r.avg_eval_ms * r.eval_count as f64)
-            .sum::<f64>()
-            / total_evals as f64
+        rule_perf.iter()
+                 .map(|r| r.avg_eval_ms * r.eval_count as f64)
+                 .sum::<f64>()
+        / total_evals as f64
     };
 
     let table = rule_perf
@@ -102,7 +101,7 @@ fn build_prompt(rule_perf: &[RulePerf]) -> String {
         .join("\n");
 
     format!(
-        r#"You are an SRE expert analysing a Rust-based CEL rules engine.
+            r#"You are an SRE expert analysing a Rust-based CEL rules engine.
 
 ## Per-rule performance (last {WINDOW_MINUTES} minutes, sorted by p95 eval latency)
   rule_id                              | evals    | avg       | p95       | p99       | parse     | err%
@@ -125,10 +124,9 @@ Limit each array to 5 items. Be specific — name rule IDs and techniques."#
 fn extract_json(s: &str) -> &str {
     // Strip markdown code fences first.
     let s = s.trim();
-    let s = s
-        .strip_prefix("```json")
-        .or_else(|| s.strip_prefix("```"))
-        .unwrap_or(s);
+    let s = s.strip_prefix("```json")
+             .or_else(|| s.strip_prefix("```"))
+             .unwrap_or(s);
     let s = s.strip_suffix("```").unwrap_or(s);
     let s = s.trim();
     // Find the JSON object even when the LLM wraps it in prose or reasoning steps.
@@ -147,17 +145,15 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
         Ok(rows) => rows,
         Err(e) => {
             warn!("trace_analysis: ClickHouse query failed: {e}");
-            return TraceInsights {
-                generated_at: Utc::now(),
-                window_minutes: WINDOW_MINUTES,
-                rule_perf: vec![],
-                llm_insights: vec!["ClickHouse query unavailable".into()],
-                llm_bottlenecks: vec![],
-                llm_recommendations: vec![],
-                llm_available: false,
-                total_evals: 0,
-                avg_eval_ms_overall: 0.0,
-            };
+            return TraceInsights { generated_at: Utc::now(),
+                                   window_minutes: WINDOW_MINUTES,
+                                   rule_perf: vec![],
+                                   llm_insights: vec!["ClickHouse query unavailable".into()],
+                                   llm_bottlenecks: vec![],
+                                   llm_recommendations: vec![],
+                                   llm_available: false,
+                                   total_evals: 0,
+                                   avg_eval_ms_overall: 0.0 };
         }
     };
 
@@ -165,25 +161,24 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
     let avg_eval_ms_overall = if total_evals == 0 {
         0.0
     } else {
-        rule_perf
-            .iter()
-            .map(|r| r.avg_eval_ms * r.eval_count as f64)
-            .sum::<f64>()
-            / total_evals as f64
+        rule_perf.iter()
+                 .map(|r| r.avg_eval_ms * r.eval_count as f64)
+                 .sum::<f64>()
+        / total_evals as f64
     };
 
     if rule_perf.is_empty() {
-        return TraceInsights {
-            generated_at: Utc::now(),
-            window_minutes: WINDOW_MINUTES,
-            rule_perf,
-            llm_insights: vec!["No audit data in the last 10 minutes.".into()],
-            llm_bottlenecks: vec![],
-            llm_recommendations: vec!["Run the simulation to generate events.".into()],
-            llm_available: true,
-            total_evals,
-            avg_eval_ms_overall,
-        };
+        return TraceInsights { generated_at: Utc::now(),
+                               window_minutes: WINDOW_MINUTES,
+                               rule_perf,
+                               llm_insights:
+                                   vec!["No audit data in the last 10 minutes.".into()],
+                               llm_bottlenecks: vec![],
+                               llm_recommendations:
+                                   vec!["Run the simulation to generate events.".into()],
+                               llm_available: true,
+                               total_evals,
+                               avg_eval_ms_overall };
     }
 
     let prompt = build_prompt(&rule_perf);
@@ -195,21 +190,11 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
                 // Strip markdown fences that local LLMs often emit despite instructions.
                 let json = extract_json(&raw);
                 match serde_json::from_str::<LlmResponse>(json) {
-                    Ok(resp) => (
-                        resp.insights,
-                        resp.top_bottlenecks,
-                        resp.recommendations,
-                        true,
-                    ),
+                    Ok(resp) => (resp.insights, resp.top_bottlenecks, resp.recommendations, true),
                     Err(e) => {
                         let preview: String = raw.chars().take(100).collect();
                         warn!("trace_analysis: LLM JSON parse failed: {e}. Raw: {preview}");
-                        (
-                            vec!["LLM response unparseable".into()],
-                            vec![],
-                            vec![],
-                            true,
-                        )
+                        (vec!["LLM response unparseable".into()], vec![], vec![], true)
                     }
                 }
             }
@@ -219,15 +204,13 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
             }
         };
 
-    TraceInsights {
-        generated_at: Utc::now(),
-        window_minutes: WINDOW_MINUTES,
-        rule_perf,
-        llm_insights,
-        llm_bottlenecks,
-        llm_recommendations,
-        llm_available,
-        total_evals,
-        avg_eval_ms_overall,
-    }
+    TraceInsights { generated_at: Utc::now(),
+                    window_minutes: WINDOW_MINUTES,
+                    rule_perf,
+                    llm_insights,
+                    llm_bottlenecks,
+                    llm_recommendations,
+                    llm_available,
+                    total_evals,
+                    avg_eval_ms_overall }
 }

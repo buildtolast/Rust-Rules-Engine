@@ -70,7 +70,7 @@ async fn main() {
 
 fn env_require(key: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| {
-        eprintln!("ERROR: required environment variable {key} is not set");
-        std::process::exit(1);
-    })
+                          eprintln!("ERROR: required environment variable {key} is not set");
+                          std::process::exit(1);
+                      })
 }

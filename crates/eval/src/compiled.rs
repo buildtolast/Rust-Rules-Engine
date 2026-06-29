@@ -31,10 +31,8 @@ pub struct CompileError {
 /// whether a clean parse error or a parser panic — returns [`CompileError`]
 /// rather than propagating, so a bad rule can never crash the loader (S7).
 pub fn compile(rule: &Rule) -> Result<CompiledRule, CompileError> {
-    let err = |message: String| CompileError {
-        rule_id: rule.id.clone(),
-        message,
-    };
+    let err = |message: String| CompileError { rule_id: rule.id.clone(),
+                                               message };
 
     // The CEL parser (antlr4rust) can panic on some malformed expressions
     // instead of returning Err; rule text is user input, so guard the boundary.
@@ -44,12 +42,10 @@ pub fn compile(rule: &Rule) -> Result<CompiledRule, CompileError> {
         Err(_) => return Err(err("parser panicked on malformed expression".to_string())),
     };
 
-    Ok(CompiledRule {
-        id: rule.id.clone(),
-        target_topic: rule.target_topic.clone(),
-        expression: rule.expression.clone(),
-        program,
-    })
+    Ok(CompiledRule { id: rule.id.clone(),
+                      target_topic: rule.target_topic.clone(),
+                      expression: rule.expression.clone(),
+                      program })
 }
 
 #[cfg(test)]
@@ -58,15 +54,13 @@ mod tests {
     use rules_core::Rule;
 
     fn make_rule(id: &str, expression: &str) -> Rule {
-        Rule {
-            id: id.to_owned(),
-            description: String::new(),
-            expression: expression.to_owned(),
-            target_topic: "out".to_owned(),
-            enabled: true,
-            version: 1,
-            updated_at: chrono::Utc::now(),
-        }
+        Rule { id: id.to_owned(),
+               description: String::new(),
+               expression: expression.to_owned(),
+               target_topic: "out".to_owned(),
+               enabled: true,
+               version: 1,
+               updated_at: chrono::Utc::now() }
     }
 
     #[test]

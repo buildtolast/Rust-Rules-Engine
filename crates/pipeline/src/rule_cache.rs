@@ -21,17 +21,13 @@ impl RuleCache {
     /// Rules that fail to compile are skipped with a warning; they do not abort the load.
     pub async fn load(repo: &store_postgres::RuleRepository) -> Result<Self, CacheError> {
         let compiled = compile_enabled(repo).await?;
-        Ok(Self {
-            inner: Arc::new(arc_swap::ArcSwap::from_pointee(compiled)),
-        })
+        Ok(Self { inner: Arc::new(arc_swap::ArcSwap::from_pointee(compiled)) })
     }
 
     /// Construct a cache pre-loaded with the given compiled rules.
     /// Intended for tests and tooling — production code should use [`RuleCache::load`].
     pub fn new(rules: Vec<eval::CompiledRule>) -> Self {
-        Self {
-            inner: Arc::new(arc_swap::ArcSwap::from_pointee(rules)),
-        }
+        Self { inner: Arc::new(arc_swap::ArcSwap::from_pointee(rules)) }
     }
 
     /// Atomically replace the rule set. The next call to [`RuleCache::get`] will
@@ -50,11 +46,10 @@ impl RuleCache {
 /// Background task: waits for `rules_changed` NOTIFY, reloads + swaps the cache.
 /// Runs forever; spawn with `tokio::spawn`. Returns `Err` only if the Postgres
 /// connection is lost.
-pub async fn watch_and_reload(
-    cache: RuleCache,
-    repo: store_postgres::RuleRepository,
-    mut listener: store_postgres::RuleChangeListener,
-) -> Result<(), CacheError> {
+pub async fn watch_and_reload(cache: RuleCache,
+                              repo: store_postgres::RuleRepository,
+                              mut listener: store_postgres::RuleChangeListener)
+                              -> Result<(), CacheError> {
     loop {
         listener.recv().await?;
         tracing::info!("rules_changed NOTIFY received, reloading cache");
@@ -68,21 +63,19 @@ pub async fn watch_and_reload(
 
 /// Fetch all enabled rules from Postgres and compile each one.
 /// Compile errors are warnings, not failures.
-async fn compile_enabled(
-    repo: &store_postgres::RuleRepository,
-) -> Result<Vec<eval::CompiledRule>, CacheError> {
+async fn compile_enabled(repo: &store_postgres::RuleRepository)
+                         -> Result<Vec<eval::CompiledRule>, CacheError> {
     let rules = repo.list().await?;
-    let compiled = rules
-        .into_iter()
-        .filter(|r| r.enabled)
-        .filter_map(|r| match compile(&r) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                tracing::warn!("skipping rule {}: {}", r.id, e);
-                None
-            }
-        })
-        .collect();
+    let compiled = rules.into_iter()
+                        .filter(|r| r.enabled)
+                        .filter_map(|r| match compile(&r) {
+                            Ok(c) => Some(c),
+                            Err(e) => {
+                                tracing::warn!("skipping rule {}: {}", r.id, e);
+                                None
+                            }
+                        })
+                        .collect();
     Ok(compiled)
 }
 
@@ -92,15 +85,13 @@ mod tests {
     use rules_core::Rule;
 
     fn make_rule(id: &str, expression: &str) -> eval::CompiledRule {
-        let rule = Rule {
-            id: id.to_string(),
-            description: String::new(),
-            expression: expression.to_string(),
-            target_topic: "target-events".to_string(),
-            enabled: true,
-            version: 1,
-            updated_at: chrono::Utc::now(),
-        };
+        let rule = Rule { id: id.to_string(),
+                          description: String::new(),
+                          expression: expression.to_string(),
+                          target_topic: "target-events".to_string(),
+                          enabled: true,
+                          version: 1,
+                          updated_at: chrono::Utc::now() };
         eval::compile(&rule).expect("test rule should compile")
     }
 
@@ -108,11 +99,9 @@ mod tests {
     fn test_cache_get_returns_snapshot() {
         let cache = RuleCache::new(vec![]);
         let snapshot = cache.get();
-        assert_eq!(
-            snapshot.len(),
-            0,
-            "empty cache should return empty snapshot"
-        );
+        assert_eq!(snapshot.len(),
+                   0,
+                   "empty cache should return empty snapshot");
     }
 
     #[test]
@@ -123,11 +112,9 @@ mod tests {
         let rule = make_rule("rule-1", "true");
         cache.swap(vec![rule]);
 
-        assert_eq!(
-            cache.get().len(),
-            1,
-            "after swap, cache should reflect new rule set"
-        );
+        assert_eq!(cache.get().len(),
+                   1,
+                   "after swap, cache should reflect new rule set");
         assert_eq!(cache.get()[0].id, "rule-1");
     }
 
@@ -143,11 +130,9 @@ mod tests {
         let rule = make_rule("rule-shared", "1 == 1");
         original.swap(vec![rule]);
 
-        assert_eq!(
-            cloned.get().len(),
-            1,
-            "clone should share ArcSwap pointer and see swapped rules"
-        );
+        assert_eq!(cloned.get().len(),
+                   1,
+                   "clone should share ArcSwap pointer and see swapped rules");
         assert_eq!(cloned.get()[0].id, "rule-shared");
     }
 

@@ -9,10 +9,9 @@ use std::time::Duration;
 use crate::{ApiError, AppState};
 
 fn simulation_senders() -> usize {
-    std::env::var("SIMULATION_SENDERS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(8)
+    std::env::var("SIMULATION_SENDERS").ok()
+                                       .and_then(|v| v.parse().ok())
+                                       .unwrap_or(8)
 }
 
 #[derive(Deserialize)]
@@ -32,10 +31,9 @@ pub struct PushResult {
     message: String,
 }
 
-pub async fn push(
-    State(s): State<AppState>,
-    Query(q): Query<PushQuery>,
-) -> Result<Json<PushResult>, ApiError> {
+pub async fn push(State(s): State<AppState>,
+                  Query(q): Query<PushQuery>)
+                  -> Result<Json<PushResult>, ApiError> {
     let requested = q.count;
     let senders = simulation_senders();
     let count = q.count;
@@ -56,19 +54,20 @@ pub async fn push(
             let topic = topic.clone();
 
             handles.push(tokio::spawn(async move {
-                let mut ok = 0usize;
-                for i in start..end {
-                    let event = generate_event(i);
-                    let payload = serde_json::to_string(&event).expect("serialize event");
-                    let key = (i % 12).to_string();
-                    let record = FutureRecord::to(&topic).payload(&payload).key(&key);
-                    match producer.send(record, Duration::from_secs(5)).await {
-                        Ok(_) => ok += 1,
-                        Err((e, _)) => tracing::warn!("simulation send error: {e}"),
-                    }
-                }
-                ok
-            }));
+                             let mut ok = 0usize;
+                             for i in start..end {
+                                 let event = generate_event(i);
+                                 let payload =
+                                     serde_json::to_string(&event).expect("serialize event");
+                                 let key = (i % 12).to_string();
+                                 let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+                                 match producer.send(record, Duration::from_secs(5)).await {
+                                     Ok(_) => ok += 1,
+                                     Err((e, _)) => tracing::warn!("simulation send error: {e}"),
+                                 }
+                             }
+                             ok
+                         }));
         }
 
         let mut published = 0usize;
@@ -78,14 +77,12 @@ pub async fn push(
         tracing::info!("simulation: published {published}/{count} events to {topic}");
     });
 
-    Ok(Json(PushResult {
-        requested,
-        publishing: count,
-        message: format!(
-            "publishing {count} events to {} in background ({senders} concurrent senders)",
-            s.source_topic
-        ),
-    }))
+    Ok(Json(PushResult { requested,
+                         publishing: count,
+                         message: format!(
+        "publishing {count} events to {} in background ({senders} concurrent senders)",
+        s.source_topic
+    ), }))
 }
 
 /// Generate an event. 75 % (i % 4 != 3) are crafted to match at least one

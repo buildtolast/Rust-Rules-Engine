@@ -18,16 +18,14 @@ pub struct RuntimeConfig {
 }
 
 pub async fn get_config(State(s): State<AppState>) -> Json<RuntimeConfig> {
-    Json(RuntimeConfig {
-        simulation_senders: env_usize("SIMULATION_SENDERS", 8),
-        source_topic: s.source_topic.clone(),
-        target_topic: env_str("TARGET_TOPIC", "target-events"),
-        consumer_group: env_str("CONSUMER_GROUP", "rules-engine"),
-        transactional_id: env_str("TRANSACTIONAL_ID", "rules-engine-txn"),
-        kafka_brokers: s.kafka_brokers.clone(),
-        http_port: env_usize("HTTP_PORT", 8080) as u16,
-        rust_log: env_str("RUST_LOG", "info"),
-    })
+    Json(RuntimeConfig { simulation_senders: env_usize("SIMULATION_SENDERS", 8),
+                         source_topic: s.source_topic.clone(),
+                         target_topic: env_str("TARGET_TOPIC", "target-events"),
+                         consumer_group: env_str("CONSUMER_GROUP", "rules-engine"),
+                         transactional_id: env_str("TRANSACTIONAL_ID", "rules-engine-txn"),
+                         kafka_brokers: s.kafka_brokers.clone(),
+                         http_port: env_usize("HTTP_PORT", 8080) as u16,
+                         rust_log: env_str("RUST_LOG", "info") })
 }
 
 fn env_str(key: &str, default: &str) -> String {
@@ -35,8 +33,7 @@ fn env_str(key: &str, default: &str) -> String {
 }
 
 fn env_usize(key: &str, default: usize) -> usize {
-    std::env::var(key)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
+    std::env::var(key).ok()
+                      .and_then(|v| v.parse().ok())
+                      .unwrap_or(default)
 }

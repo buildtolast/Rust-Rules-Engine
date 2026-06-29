@@ -45,31 +45,29 @@ pub struct ServiceMetrics {
 }
 
 pub async fn metrics(State(s): State<AppState>) -> Json<ServiceMetrics> {
-    let (ch_metrics, pg_metrics, kafka_healthy) = tokio::join!(
-        query_clickhouse(&s),
-        query_postgres(&s),
-        check_kafka_health(&s),
-    );
+    let (ch_metrics, pg_metrics, kafka_healthy) = tokio::join!(query_clickhouse(&s),
+                                                               query_postgres(&s),
+                                                               check_kafka_health(&s),);
 
     let c = &s.counters;
-    Json(ServiceMetrics {
-        pipeline: PipelineMetrics {
-            messages_total: c.messages_total.load(Relaxed),
-            batches_total: c.batches_total.load(Relaxed),
-            messages_per_sec: (c.messages_per_sec() * 10.0).round() / 10.0,
-            avg_eval_ms: c.avg_eval_ms(),
-            avg_txn_ms: c.avg_txn_ms(),
-            consumer_lag: c.consumer_lag.load(Relaxed),
-            rules_cached: s.rule_cache.get().len(),
-        },
-        kafka: KafkaMetrics {
-            healthy: kafka_healthy,
-            partitions: 12,
-            source_topic: s.source_topic.clone(),
-        },
-        clickhouse: ch_metrics,
-        postgres: pg_metrics,
-    })
+    Json(ServiceMetrics { pipeline: PipelineMetrics { messages_total: c.messages_total
+                                                                       .load(Relaxed),
+                                                      batches_total: c.batches_total
+                                                                      .load(Relaxed),
+                                                      messages_per_sec: (c.messages_per_sec()
+                                                                         * 10.0)
+                                                                                .round()
+                                                                        / 10.0,
+                                                      avg_eval_ms: c.avg_eval_ms(),
+                                                      avg_txn_ms: c.avg_txn_ms(),
+                                                      consumer_lag: c.consumer_lag
+                                                                     .load(Relaxed),
+                                                      rules_cached: s.rule_cache.get().len() },
+                          kafka: KafkaMetrics { healthy: kafka_healthy,
+                                                partitions: 12,
+                                                source_topic: s.source_topic.clone() },
+                          clickhouse: ch_metrics,
+                          postgres: pg_metrics })
 }
 
 async fn query_clickhouse(s: &AppState) -> ClickHouseMetrics {
@@ -81,21 +79,17 @@ async fn query_clickhouse(s: &AppState) -> ClickHouseMetrics {
         n: u64,
     }
 
-    let (audits, sre) = tokio::join!(
-        s.ch_client
-            .query("SELECT count() AS n FROM audits")
-            .fetch_one::<Row>(),
-        s.ch_client
-            .query("SELECT count() AS n FROM sre_observations")
-            .fetch_one::<Row>(),
-    );
+    let (audits, sre) = tokio::join!(s.ch_client
+                                      .query("SELECT count() AS n FROM audits")
+                                      .fetch_one::<Row>(),
+                                     s.ch_client
+                                      .query("SELECT count() AS n FROM sre_observations")
+                                      .fetch_one::<Row>(),);
 
     let latency_ms = start.elapsed().as_millis() as u64;
-    ClickHouseMetrics {
-        audit_rows: audits.map(|r| r.n).unwrap_or(0),
-        sre_observations: sre.map(|r| r.n).unwrap_or(0),
-        latency_ms,
-    }
+    ClickHouseMetrics { audit_rows: audits.map(|r| r.n).unwrap_or(0),
+                        sre_observations: sre.map(|r| r.n).unwrap_or(0),
+                        latency_ms }
 }
 
 async fn query_postgres(s: &AppState) -> PostgresMetrics {
@@ -115,16 +109,12 @@ async fn query_postgres(s: &AppState) -> PostgresMetrics {
 
     let latency_ms = start.elapsed().as_millis() as u64;
     match result {
-        Ok(r) => PostgresMetrics {
-            rules_total: r.total as u64,
-            rules_enabled: r.enabled as u64,
-            latency_ms,
-        },
-        Err(_) => PostgresMetrics {
-            rules_total: 0,
-            rules_enabled: 0,
-            latency_ms,
-        },
+        Ok(r) => PostgresMetrics { rules_total: r.total as u64,
+                                   rules_enabled: r.enabled as u64,
+                                   latency_ms },
+        Err(_) => PostgresMetrics { rules_total: 0,
+                                    rules_enabled: 0,
+                                    latency_ms },
     }
 }
 

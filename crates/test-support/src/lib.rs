@@ -7,10 +7,9 @@ use tokio::time::timeout;
 
 /// Returns true if a TCP connection to `addr` succeeds within 1 second.
 pub async fn probe_tcp(addr: &str) -> bool {
-    timeout(Duration::from_secs(1), TcpStream::connect(addr))
-        .await
-        .map(|r| r.is_ok())
-        .unwrap_or(false)
+    timeout(Duration::from_secs(1), TcpStream::connect(addr)).await
+                                                             .map(|r| r.is_ok())
+                                                             .unwrap_or(false)
 }
 
 pub async fn probe_postgres() -> bool {
@@ -45,10 +44,8 @@ pub async fn probe_kafka() -> bool {
 macro_rules! skip_if_unavailable {
     ($probe:expr, $label:expr) => {
         if !$probe.await {
-            eprintln!(
-                "[SKIP] {} is not reachable — skipping integration test",
-                $label
-            );
+            eprintln!("[SKIP] {} is not reachable — skipping integration test",
+                      $label);
             return;
         }
     };

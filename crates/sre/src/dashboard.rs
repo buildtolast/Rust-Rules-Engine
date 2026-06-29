@@ -191,28 +191,24 @@ es.onmessage = e=>{
 async fn status(State(app): State<AppState>) -> Json<serde_json::Value> {
     let st = app.state.read().await;
     Json(serde_json::json!({
-        "containers":    st.containers,
-        "llm_available": st.llm_available,
-        "last_scan_at":  st.last_scan_at,
-    }))
+             "containers":    st.containers,
+             "llm_available": st.llm_available,
+             "last_scan_at":  st.last_scan_at,
+         }))
 }
 
 async fn findings(State(app): State<AppState>) -> Json<Vec<Finding>> {
     // Serve from ClickHouse so all replicas return consistent data.
     // Falls back to in-memory state if ClickHouse is unavailable.
     match SreStore::read_recent(&app.ch, 100).await {
-        Ok(rows) => Json(
-            rows.into_iter()
-                .map(|obs| Finding {
-                    severity: obs.severity,
-                    category: obs.category,
-                    finding: obs.finding,
-                    proposed_fix: obs.proposed_fix,
-                    container_name: obs.container_name,
-                    observed_at: Some(obs.observed_at),
-                })
-                .collect(),
-        ),
+        Ok(rows) => Json(rows.into_iter()
+                             .map(|obs| Finding { severity: obs.severity,
+                                                  category: obs.category,
+                                                  finding: obs.finding,
+                                                  proposed_fix: obs.proposed_fix,
+                                                  container_name: obs.container_name,
+                                                  observed_at: Some(obs.observed_at) })
+                             .collect()),
         Err(_) => {
             let st = app.state.read().await;
             Json(st.findings.iter().cloned().collect())
@@ -220,22 +216,17 @@ async fn findings(State(app): State<AppState>) -> Json<Vec<Finding>> {
     }
 }
 
-async fn findings_sse(
-    State(app): State<AppState>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+async fn findings_sse(State(app): State<AppState>)
+                      -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = app.tx.subscribe();
-    let stream = BroadcastStream::new(rx)
-        .filter_map(|r| async move { r.ok() })
-        .map(|f| {
-            Ok::<_, Infallible>(
+    let stream = BroadcastStream::new(rx).filter_map(|r| async move { r.ok() })
+                                         .map(|f| {
+                                             Ok::<_, Infallible>(
                 Event::default().data(serde_json::to_string(&f).unwrap_or_default()),
             )
-        });
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(25))
-            .text("ping"),
-    )
+                                         });
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(25))
+                                                .text("ping"))
 }
 
 async fn outages(State(app): State<AppState>) -> Json<Vec<Incident>> {
@@ -260,14 +251,12 @@ async fn system_ready(State(app): State<AppState>) -> (StatusCode, Json<serde_js
         Some(probe) => {
             let mut map = serde_json::Map::new();
             for svc in &probe.services {
-                map.insert(
-                    svc.name.clone(),
-                    serde_json::json!({
-                        "ok": svc.ok,
-                        "latency_ms": svc.latency_ms,
-                        "error": svc.error,
-                    }),
-                );
+                map.insert(svc.name.clone(),
+                           serde_json::json!({
+                               "ok": svc.ok,
+                               "latency_ms": svc.latency_ms,
+                               "error": svc.error,
+                           }));
             }
             serde_json::Value::Object(map)
         }
@@ -280,29 +269,26 @@ async fn system_ready(State(app): State<AppState>) -> (StatusCode, Json<serde_js
     let degraded = !ready;
 
     // HTTP 503 only when both postgres AND kafka are unreachable.
-    let postgres_ok = st
-        .last_probe
-        .as_ref()
-        .and_then(|p| p.services.iter().find(|s| s.name == "postgres"))
-        .map(|s| s.ok)
-        .unwrap_or(true);
-    let kafka_ok = st
-        .last_probe
-        .as_ref()
-        .and_then(|p| p.services.iter().find(|s| s.name == "kafka"))
-        .map(|s| s.ok)
-        .unwrap_or(true);
+    let postgres_ok = st.last_probe
+                        .as_ref()
+                        .and_then(|p| p.services.iter().find(|s| s.name == "postgres"))
+                        .map(|s| s.ok)
+                        .unwrap_or(true);
+    let kafka_ok = st.last_probe
+                     .as_ref()
+                     .and_then(|p| p.services.iter().find(|s| s.name == "kafka"))
+                     .map(|s| s.ok)
+                     .unwrap_or(true);
     let status_code = if !postgres_ok && !kafka_ok {
         StatusCode::SERVICE_UNAVAILABLE
     } else {
         StatusCode::OK
     };
 
-    let probed_at = st
-        .last_probe
-        .as_ref()
-        .map(|p| p.probed_at.to_rfc3339())
-        .unwrap_or_default();
+    let probed_at = st.last_probe
+                      .as_ref()
+                      .map(|p| p.probed_at.to_rfc3339())
+                      .unwrap_or_default();
 
     let backlog = match &st.weakest_link {
         Some(wl) => serde_json::json!({
@@ -325,48 +311,42 @@ async fn system_ready(State(app): State<AppState>) -> (StatusCode, Json<serde_js
         }),
     };
 
-    (
-        status_code,
-        Json(serde_json::json!({
-            "ready": ready,
-            "degraded": degraded,
-            "services": services_map,
-            "backlog": backlog,
-            "probed_at": probed_at,
-        })),
-    )
+    (status_code,
+     Json(serde_json::json!({
+              "ready": ready,
+              "degraded": degraded,
+              "services": services_map,
+              "backlog": backlog,
+              "probed_at": probed_at,
+          })))
 }
 
 async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({"ok": true}))
 }
 
-pub async fn serve(
-    state: Arc<RwLock<SreState>>,
-    tx: broadcast::Sender<Finding>,
-    ch: Client,
-    llm: AnalysisClient,
-    port: u16,
-) {
+pub async fn serve(state: Arc<RwLock<SreState>>,
+                   tx: broadcast::Sender<Finding>,
+                   ch: Client,
+                   llm: AnalysisClient,
+                   port: u16) {
     let app_state = AppState { state, tx, ch, llm };
 
-    let router = Router::new()
-        .route("/", get(index))
-        .route("/api/sre/status", get(status))
-        .route("/api/sre/findings", get(findings))
-        .route("/api/sre/findings/stream", get(findings_sse))
-        .route("/api/sre/outages", get(outages))
-        .route("/api/sre/traces/insights", get(traces_insights))
-        .route("/api/system/ready", get(system_ready))
-        .route("/health", get(health_check))
-        .with_state(app_state);
+    let router = Router::new().route("/", get(index))
+                              .route("/api/sre/status", get(status))
+                              .route("/api/sre/findings", get(findings))
+                              .route("/api/sre/findings/stream", get(findings_sse))
+                              .route("/api/sre/outages", get(outages))
+                              .route("/api/sre/traces/insights", get(traces_insights))
+                              .route("/api/system/ready", get(system_ready))
+                              .route("/health", get(health_check))
+                              .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .expect("failed to bind dashboard port");
 
     tracing::info!("SRE dashboard listening on http://0.0.0.0:{port}");
-    axum::serve(listener, router)
-        .await
-        .expect("dashboard server error");
+    axum::serve(listener, router).await
+                                 .expect("dashboard server error");
 }

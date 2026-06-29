@@ -40,30 +40,25 @@ pub struct AnalysisClient {
 }
 
 impl AnalysisClient {
-    pub fn new(
-        base_url: impl Into<String>,
-        model: impl Into<String>,
-        api_key: Option<String>,
-        timeout_secs: u64,
-    ) -> Self {
-        let http = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(timeout_secs))
-            .build()
-            .expect("failed to build reqwest client");
-        Self {
-            base_url: base_url.into(),
-            model: model.into(),
-            api_key,
-            http,
-        }
+    pub fn new(base_url: impl Into<String>,
+               model: impl Into<String>,
+               api_key: Option<String>,
+               timeout_secs: u64)
+               -> Self {
+        let http = reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(5))
+                                             .timeout(std::time::Duration::from_secs(timeout_secs))
+                                             .build()
+                                             .expect("failed to build reqwest client");
+        Self { base_url: base_url.into(),
+               model: model.into(),
+               api_key,
+               http }
     }
 
-    pub async fn analyze(
-        &self,
-        container: &str,
-        log_window: &str,
-    ) -> Result<Finding, AnalysisError> {
+    pub async fn analyze(&self,
+                         container: &str,
+                         log_window: &str)
+                         -> Result<Finding, AnalysisError> {
         let system_prompt = "You are an SRE agent reviewing container logs for the Rust Rules Engine \
             service stack (Redpanda, ClickHouse, Postgres, rules-engine, sre-agent). \
             Respond ONLY with a valid JSON object. All keys MUST be double-quoted strings. \
@@ -75,10 +70,8 @@ impl AnalysisClient {
             \"proposed_fix\" (plain English proposed action under 200 words, or \"No action required\" for INFO). \
             Do not use unquoted keys. Do not add markdown or prose outside the JSON object.";
 
-        let user_content = format!(
-            "Container: {}\nLog window (last 60 seconds, 200 lines):\n{}",
-            container, log_window
-        );
+        let user_content = format!("Container: {}\nLog window (last 60 seconds, 200 lines):\n{}",
+                                   container, log_window);
 
         let body = serde_json::json!({
             "model": self.model,
@@ -99,10 +92,9 @@ impl AnalysisClient {
                 if attempt > 0 {
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
-                let mut req = self
-                    .http
-                    .post(format!("{}/v1/chat/completions", self.base_url))
-                    .json(&body);
+                let mut req = self.http
+                                  .post(format!("{}/v1/chat/completions", self.base_url))
+                                  .json(&body);
                 if let Some(key) = &self.api_key {
                     req = req.bearer_auth(key);
                 }
@@ -131,10 +123,10 @@ impl AnalysisClient {
             }
         };
 
-        let payload: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| AnalysisError::Unavailable(e.to_string()))?;
+        let payload: serde_json::Value =
+            response.json()
+                    .await
+                    .map_err(|e| AnalysisError::Unavailable(e.to_string()))?;
 
         let content = payload["choices"][0]["message"]["content"]
             .as_str()
@@ -143,55 +135,53 @@ impl AnalysisClient {
         extract_json(content)
     }
 
-    pub async fn decide_weakest_link(
-        &self,
-        probe: &SystemProbeResult,
-        total_lag: i64,
-        lag_trend: &str,
-        ch_backlog_batches: i32,
-        recent_findings: &[Finding],
-    ) -> Option<WeakestLinkDecision> {
+    pub async fn decide_weakest_link(&self,
+                                     probe: &SystemProbeResult,
+                                     total_lag: i64,
+                                     lag_trend: &str,
+                                     ch_backlog_batches: i32,
+                                     recent_findings: &[Finding])
+                                     -> Option<WeakestLinkDecision> {
         let system_prompt = "You are an SRE agent deciding which service is the weakest link in a \
             distributed system. Respond ONLY with valid JSON: \
             {\"weakest_link\":\"...\",\"reasoning\":\"...\",\"recommended_action\":\"...\",\"severity\":\"...\"} \
             weakest_link must be one of: postgres, clickhouse, kafka, app, none. \
             severity must be one of: INFO, WARN, ERROR, CRITICAL.";
 
-        let service_lines: String = probe
-            .services
-            .iter()
-            .map(|s| {
-                if s.ok {
-                    format!("  {}: ok ({}ms)", s.name, s.latency_ms)
-                } else {
-                    format!(
-                        "  {}: ERROR: {}",
-                        s.name,
-                        s.error.as_deref().unwrap_or("unknown")
-                    )
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        let service_lines: String = probe.services
+                                         .iter()
+                                         .map(|s| {
+                                             if s.ok {
+                                                 format!("  {}: ok ({}ms)", s.name, s.latency_ms)
+                                             } else {
+                                                 format!("  {}: ERROR: {}",
+                                                         s.name,
+                                                         s.error.as_deref().unwrap_or("unknown"))
+                                             }
+                                         })
+                                         .collect::<Vec<_>>()
+                                         .join("\n");
 
-        let findings_lines: String = recent_findings
-            .iter()
-            .rev()
-            .take(5)
-            .map(|f| format!("  {}: [{}] {}", f.container_name, f.severity, f.finding))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let findings_lines: String =
+            recent_findings.iter()
+                           .rev()
+                           .take(5)
+                           .map(|f| {
+                               format!("  {}: [{}] {}", f.container_name, f.severity, f.finding)
+                           })
+                           .collect::<Vec<_>>()
+                           .join("\n");
 
         let user_content = format!(
-            "Consumer lag: {total_lag} messages ({lag_trend})\n\
+                                   "Consumer lag: {total_lag} messages ({lag_trend})\n\
              ClickHouse backlog: {ch_backlog_batches} buffered audit batches\n\
              Service health:\n{service_lines}\n\
              Recent findings (last 5):\n{}",
-            if findings_lines.is_empty() {
-                "  (none)".to_string()
-            } else {
-                findings_lines
-            }
+                                   if findings_lines.is_empty() {
+                                       "  (none)".to_string()
+                                   } else {
+                                       findings_lines
+                                   }
         );
 
         let body = serde_json::json!({
@@ -211,10 +201,9 @@ impl AnalysisClient {
             if attempt > 0 {
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
-            let mut req = self
-                .http
-                .post(format!("{}/v1/chat/completions", self.base_url))
-                .json(&body);
+            let mut req = self.http
+                              .post(format!("{}/v1/chat/completions", self.base_url))
+                              .json(&body);
             if let Some(key) = &self.api_key {
                 req = req.bearer_auth(key);
             }
@@ -248,10 +237,8 @@ impl AnalysisClient {
         let text = match result_text {
             Some(t) => t,
             None => {
-                tracing::warn!(
-                    "weakest-link LLM unavailable: {}",
-                    last_err.as_deref().unwrap_or("unknown")
-                );
+                tracing::warn!("weakest-link LLM unavailable: {}",
+                               last_err.as_deref().unwrap_or("unknown"));
                 return None;
             }
         };
@@ -269,12 +256,11 @@ impl AnalysisClient {
         let end = text_ref.rfind('}')?;
         let raw = &text_ref[start..=end];
 
-        serde_json::from_str::<WeakestLinkDecision>(raw)
-            .or_else(|_| {
-                let fixed = quote_bare_keys(raw);
-                serde_json::from_str::<WeakestLinkDecision>(&fixed)
-            })
-            .ok()
+        serde_json::from_str::<WeakestLinkDecision>(raw).or_else(|_| {
+            let fixed = quote_bare_keys(raw);
+            serde_json::from_str::<WeakestLinkDecision>(&fixed)
+        })
+        .ok()
     }
 
     /// Lightweight reachability check — returns true if the LLM responds to a
@@ -285,10 +271,9 @@ impl AnalysisClient {
             "messages": [{"role": "user", "content": "ping"}],
             "max_tokens": 1
         });
-        let mut req = self
-            .http
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            .json(&body);
+        let mut req = self.http
+                          .post(format!("{}/v1/chat/completions", self.base_url))
+                          .json(&body);
         if let Some(key) = &self.api_key {
             req = req.bearer_auth(key);
         }
@@ -322,32 +307,26 @@ impl AnalysisClient {
             content: String,
         }
 
-        let req = Req {
-            model: &self.model,
-            messages: vec![Msg {
-                role: "user",
-                content: prompt,
-            }],
-            temperature: 0.2,
-            max_tokens: 1024,
-        };
+        let req = Req { model: &self.model,
+                        messages: vec![Msg { role: "user",
+                                             content: prompt }],
+                        temperature: 0.2,
+                        max_tokens: 1024 };
 
-        let mut request = self
-            .http
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            .json(&req);
+        let mut request = self.http
+                              .post(format!("{}/v1/chat/completions", self.base_url))
+                              .json(&req);
         if let Some(key) = &self.api_key {
             request = request.bearer_auth(key);
         }
 
         let resp: Resp = request.send().await?.error_for_status()?.json().await?;
 
-        Ok(resp
-            .choices
-            .into_iter()
-            .next()
-            .map(|c| c.message.content)
-            .unwrap_or_default())
+        Ok(resp.choices
+               .into_iter()
+               .next()
+               .map(|c| c.message.content)
+               .unwrap_or_default())
     }
 }
 
@@ -372,8 +351,8 @@ fn quote_bare_keys(s: &str) -> String {
             }
             // If next char is not '"', try to read an identifier
             if i < bytes.len()
-                && bytes[i] != b'"'
-                && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_')
+               && bytes[i] != b'"'
+               && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_')
             {
                 let start = i;
                 while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
@@ -415,9 +394,9 @@ fn extract_json(content: &str) -> Result<Finding, AnalysisError> {
         content
     };
 
-    let start = content
-        .find('{')
-        .ok_or_else(|| AnalysisError::ParseError("no JSON object in LLM response".into()))?;
+    let start =
+        content.find('{')
+               .ok_or_else(|| AnalysisError::ParseError("no JSON object in LLM response".into()))?;
     let end = content
         .rfind('}')
         .ok_or_else(|| AnalysisError::ParseError("unclosed JSON object in LLM response".into()))?;
@@ -425,10 +404,11 @@ fn extract_json(content: &str) -> Result<Finding, AnalysisError> {
     let raw = &content[start..=end];
     // Try strict parse first; fall back to quoting bare keys (some models output JS-style objects).
     serde_json::from_str::<Finding>(raw).or_else(|_| {
-        let fixed = quote_bare_keys(raw);
-        serde_json::from_str::<Finding>(&fixed)
-            .map_err(|e| AnalysisError::ParseError(format!("{e}: {raw}")))
-    })
+                                            let fixed = quote_bare_keys(raw);
+                                            serde_json::from_str::<Finding>(&fixed).map_err(|e| {
+                                                AnalysisError::ParseError(format!("{e}: {raw}"))
+                                            })
+                                        })
 }
 
 #[cfg(test)]

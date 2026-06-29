@@ -13,15 +13,13 @@ const RULE_2: &str = r#"event.amount > 38620 && event.region == "APAC" && event.
 const RULE_3: &str = r#"event.amount > 18508 && event.region == "LATAM" && event.metadata.source == "partner" && event.metadata.priority <= 5 && event.tier == "premium" && has(event.timestamp) && event.timestamp.startsWith("202")"#;
 
 fn rule(expr: &str) -> Rule {
-    Rule {
-        id: "r".into(),
-        description: "test".into(),
-        expression: expr.into(),
-        target_topic: "target-events".into(),
-        enabled: true,
-        version: 1,
-        updated_at: chrono::Utc::now(),
-    }
+    Rule { id: "r".into(),
+           description: "test".into(),
+           expression: expr.into(),
+           target_topic: "target-events".into(),
+           enabled: true,
+           version: 1,
+           updated_at: chrono::Utc::now() }
 }
 
 fn event(raw: &str) -> SourceEvent {

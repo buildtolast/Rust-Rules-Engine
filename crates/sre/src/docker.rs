@@ -40,57 +40,49 @@ fn health_from(h: Option<Health>) -> HealthSummary {
 
 pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, DockerError> {
     // Include stopped/exited containers so the SRE detects containers that went down.
-    let summaries = docker
-        .list_containers(Some(ListContainersOptions::<String> {
-            all: true,
-            ..Default::default()
-        }))
-        .await?;
+    let summaries =
+        docker.list_containers(Some(ListContainersOptions::<String> { all: true,
+                                                                      ..Default::default() }))
+              .await?;
 
     let mut result = Vec::with_capacity(summaries.len());
     for s in summaries {
         let id = s.id.unwrap_or_default();
-        let name = s
-            .names
-            .as_ref()
-            .and_then(|v| v.first())
-            .map(|n| n.trim_start_matches('/').to_string())
-            .unwrap_or_default();
+        let name = s.names
+                    .as_ref()
+                    .and_then(|v| v.first())
+                    .map(|n| n.trim_start_matches('/').to_string())
+                    .unwrap_or_default();
 
         let inspect = docker.inspect_container(&id, None).await?;
         let state = inspect.state.unwrap_or_default();
 
         let running = state.running.unwrap_or(false);
         let exit_code = state.exit_code;
-        let one_shot = inspect
-            .host_config
-            .as_ref()
-            .and_then(|hc| hc.restart_policy.as_ref())
-            .and_then(|rp| rp.name.as_ref())
-            .map(|n| {
-                matches!(
-                    n,
-                    bollard::models::RestartPolicyNameEnum::EMPTY
-                        | bollard::models::RestartPolicyNameEnum::NO
-                )
-            })
-            .unwrap_or(true);
+        let one_shot = inspect.host_config
+                              .as_ref()
+                              .and_then(|hc| hc.restart_policy.as_ref())
+                              .and_then(|rp| rp.name.as_ref())
+                              .map(|n| {
+                                  matches!(n,
+                                           bollard::models::RestartPolicyNameEnum::EMPTY
+                                           | bollard::models::RestartPolicyNameEnum::NO)
+                              })
+                              .unwrap_or(true);
         let started_at = state.started_at.as_deref().and_then(|s| {
-            chrono::DateTime::parse_from_rfc3339(s)
+                                                        chrono::DateTime::parse_from_rfc3339(s)
                 .ok()
                 .map(|dt| dt.with_timezone(&chrono::Utc))
-        });
+                                                    });
         let health = health_from(state.health);
 
-        result.push(ContainerInfo {
-            name,
-            id,
-            running,
-            started_at,
-            health,
-            one_shot,
-            exit_code,
-        });
+        result.push(ContainerInfo { name,
+                                    id,
+                                    running,
+                                    started_at,
+                                    health,
+                                    one_shot,
+                                    exit_code });
     }
     Ok(result)
 }
@@ -101,22 +93,18 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
 /// equals cpu_stats and always yields 0% CPU.
 /// Returns `None` for stopped containers or on any API error.
 pub async fn fetch_stats(docker: &Docker, id: &str) -> Option<(f64, u64, u64)> {
-    let opts = StatsOptions {
-        stream: false,
-        one_shot: false,
-    };
+    let opts = StatsOptions { stream: false,
+                              one_shot: false };
     let stats = docker.stats(id, Some(opts)).next().await?.ok()?;
 
-    let cpu_delta = stats
-        .cpu_stats
-        .cpu_usage
-        .total_usage
-        .saturating_sub(stats.precpu_stats.cpu_usage.total_usage);
-    let system_delta = stats
-        .cpu_stats
-        .system_cpu_usage
-        .unwrap_or(0)
-        .saturating_sub(stats.precpu_stats.system_cpu_usage.unwrap_or(0));
+    let cpu_delta = stats.cpu_stats
+                         .cpu_usage
+                         .total_usage
+                         .saturating_sub(stats.precpu_stats.cpu_usage.total_usage);
+    let system_delta = stats.cpu_stats
+                            .system_cpu_usage
+                            .unwrap_or(0)
+                            .saturating_sub(stats.precpu_stats.system_cpu_usage.unwrap_or(0));
     let num_cpus = stats.cpu_stats.online_cpus.unwrap_or(1) as f64;
 
     let cpu_pct = if system_delta > 0 {
@@ -132,20 +120,17 @@ pub async fn fetch_stats(docker: &Docker, id: &str) -> Option<(f64, u64, u64)> {
 }
 
 pub async fn restart_container(docker: &Docker, id: &str) -> Result<(), DockerError> {
-    docker
-        .restart_container(id, None)
-        .await
-        .map_err(DockerError::Bollard)
+    docker.restart_container(id, None)
+          .await
+          .map_err(DockerError::Bollard)
 }
 
 pub async fn tail_logs(docker: &Docker, name: &str, lines: usize) -> Result<String, DockerError> {
-    let opts = LogsOptions::<String> {
-        stdout: true,
-        stderr: true,
-        tail: lines.to_string(),
-        follow: false,
-        ..Default::default()
-    };
+    let opts = LogsOptions::<String> { stdout: true,
+                                       stderr: true,
+                                       tail: lines.to_string(),
+                                       follow: false,
+                                       ..Default::default() };
 
     let mut stream = docker.logs(name, Some(opts));
     let mut collected = Vec::new();

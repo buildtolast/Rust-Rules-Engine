@@ -12,13 +12,11 @@ pub struct AutoTuner {
 
 impl AutoTuner {
     pub fn new(enabled: bool, compose_file: String, env_file: String, cooldown_secs: u64) -> Self {
-        Self {
-            cooldowns: Mutex::new(HashMap::new()),
-            cooldown: Duration::from_secs(cooldown_secs),
-            compose_file,
-            env_file,
-            enabled,
-        }
+        Self { cooldowns: Mutex::new(HashMap::new()),
+               cooldown: Duration::from_secs(cooldown_secs),
+               compose_file,
+               env_file,
+               enabled }
     }
 
     /// Called when a CRITICAL memory finding fires. Returns a human-readable
@@ -43,33 +41,28 @@ impl AutoTuner {
 
         let new_limit_mb = (mem_used_bytes as f64 / 0.4 / 1_048_576.0).ceil() as u64;
 
-        tracing::info!(
-            container = container_name,
-            service,
-            env_var,
-            new_limit_mb,
-            "auto-tune: applying memory limit increase"
-        );
+        tracing::info!(container = container_name,
+                       service,
+                       env_var,
+                       new_limit_mb,
+                       "auto-tune: applying memory limit increase");
 
         if let Err(e) = update_env_file(&self.env_file, env_var, new_limit_mb) {
             tracing::warn!("auto-tune: failed to write .env ({e}), aborting");
             return None;
         }
 
-        let result = tokio::process::Command::new("docker")
-            .args([
-                "compose",
-                "-f",
-                &self.compose_file,
-                "--env-file",
-                &self.env_file,
-                "up",
-                "-d",
-                "--no-deps",
-                service,
-            ])
-            .output()
-            .await;
+        let result = tokio::process::Command::new("docker").args(["compose",
+                                                                  "-f",
+                                                                  &self.compose_file,
+                                                                  "--env-file",
+                                                                  &self.env_file,
+                                                                  "up",
+                                                                  "-d",
+                                                                  "--no-deps",
+                                                                  service])
+                                                           .output()
+                                                           .await;
 
         match result {
             Ok(o) if o.status.success() => {
@@ -129,17 +122,16 @@ fn update_env_file(path: &str, key: &str, value_mb: u64) -> std::io::Result<()> 
     let new_line = format!("{key}={value_mb}M");
     let mut found = false;
 
-    let mut lines: Vec<String> = content
-        .lines()
-        .map(|l| {
-            if l.starts_with(&prefix) {
-                found = true;
-                new_line.clone()
-            } else {
-                l.to_string()
-            }
-        })
-        .collect();
+    let mut lines: Vec<String> = content.lines()
+                                        .map(|l| {
+                                            if l.starts_with(&prefix) {
+                                                found = true;
+                                                new_line.clone()
+                                            } else {
+                                                l.to_string()
+                                            }
+                                        })
+                                        .collect();
 
     if !found {
         lines.push(new_line);
@@ -185,10 +177,8 @@ mod tests {
 
     #[test]
     fn service_mapping_redpanda() {
-        assert_eq!(
-            service_mapping("rre-redpanda-0"),
-            Some(("redpanda-0", "REDPANDA_MEM_LIMIT"))
-        );
+        assert_eq!(service_mapping("rre-redpanda-0"),
+                   Some(("redpanda-0", "REDPANDA_MEM_LIMIT")));
     }
 
     #[test]

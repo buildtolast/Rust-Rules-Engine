@@ -56,40 +56,33 @@ pub struct SreStore {
 
 impl SreStore {
     pub fn new(client: &Client) -> Self {
-        Self {
-            client: client.clone(),
-            last_hashes: Default::default(),
-            quiet_streaks: Default::default(),
-            last_restart: Default::default(),
-            prev_running: Default::default(),
-        }
+        Self { client: client.clone(),
+               last_hashes: Default::default(),
+               quiet_streaks: Default::default(),
+               last_restart: Default::default(),
+               prev_running: Default::default() }
     }
 
     /// Call once per container per scan. Returns Some(event) only when the
     /// running state transitions (true→false or false→true). The first scan
     /// is used to establish baseline — no events emitted.
-    pub fn update_running_state(
-        &mut self,
-        container: &str,
-        running: bool,
-        auto_restarted: bool,
-    ) -> Option<SreOutageEvent> {
+    pub fn update_running_state(&mut self,
+                                container: &str,
+                                running: bool,
+                                auto_restarted: bool)
+                                -> Option<SreOutageEvent> {
         let prev = self.prev_running.get(container).copied();
         self.prev_running.insert(container.to_string(), running);
 
         match (prev, running) {
-            (Some(true), false) => Some(SreOutageEvent {
-                container_name: container.to_string(),
-                event_type: 1, // down
-                occurred_at: Utc::now(),
-                auto_restarted: false,
-            }),
-            (Some(false), true) => Some(SreOutageEvent {
-                container_name: container.to_string(),
-                event_type: 2, // restored
-                occurred_at: Utc::now(),
-                auto_restarted,
-            }),
+            (Some(true), false) => Some(SreOutageEvent { container_name: container.to_string(),
+                                                         event_type: 1, // down
+                                                         occurred_at: Utc::now(),
+                                                         auto_restarted: false }),
+            (Some(false), true) => Some(SreOutageEvent { container_name: container.to_string(),
+                                                         event_type: 2, // restored
+                                                         occurred_at: Utc::now(),
+                                                         auto_restarted }),
             _ => None, // first scan or no change
         }
     }
@@ -103,14 +96,13 @@ impl SreStore {
 
     /// Returns all incidents (paired down/restored events), most recent first.
     pub async fn read_incidents(client: &Client) -> Result<Vec<Incident>, SreStoreError> {
-        let events = client
-            .query(
-                "SELECT container_name, event_type, occurred_at, auto_restarted
+        let events = client.query(
+                                  "SELECT container_name, event_type, occurred_at, auto_restarted
                  FROM sre_outages
                  ORDER BY container_name, occurred_at ASC",
-            )
-            .fetch_all::<SreOutageEvent>()
-            .await?;
+        )
+                           .fetch_all::<SreOutageEvent>()
+                           .await?;
 
         // Pair down (1) with the next restored (2) per container.
         let mut open: std::collections::HashMap<String, SreOutageEvent> = Default::default();
@@ -124,14 +116,12 @@ impl SreStore {
                 2 => {
                     if let Some(down) = open.remove(&ev.container_name) {
                         let duration_secs = (ev.occurred_at - down.occurred_at).num_seconds();
-                        incidents.push(Incident {
-                            container: down.container_name,
-                            down_at: down.occurred_at,
-                            restored_at: Some(ev.occurred_at),
-                            auto_restarted: ev.auto_restarted,
-                            duration_secs: Some(duration_secs),
-                            active: false,
-                        });
+                        incidents.push(Incident { container: down.container_name,
+                                                  down_at: down.occurred_at,
+                                                  restored_at: Some(ev.occurred_at),
+                                                  auto_restarted: ev.auto_restarted,
+                                                  duration_secs: Some(duration_secs),
+                                                  active: false });
                     }
                 }
                 _ => {}
@@ -140,14 +130,12 @@ impl SreStore {
 
         // Any remaining open events are still-active outages.
         for (_, down) in open {
-            incidents.push(Incident {
-                container: down.container_name,
-                down_at: down.occurred_at,
-                restored_at: None,
-                auto_restarted: false,
-                duration_secs: None,
-                active: true,
-            });
+            incidents.push(Incident { container: down.container_name,
+                                      down_at: down.occurred_at,
+                                      restored_at: None,
+                                      auto_restarted: false,
+                                      duration_secs: None,
+                                      active: true });
         }
 
         incidents.sort_by(|a, b| b.down_at.cmp(&a.down_at));
@@ -170,11 +158,10 @@ impl SreStore {
     /// True if we issued a restart for this container and it was previously down.
     pub fn was_auto_restarted(&self, container: &str) -> bool {
         let was_down = self.prev_running.get(container).copied() == Some(false);
-        let restarted_recently = self
-            .last_restart
-            .get(container)
-            .map(|t| t.elapsed().as_secs() < 120)
-            .unwrap_or(false);
+        let restarted_recently = self.last_restart
+                                     .get(container)
+                                     .map(|t| t.elapsed().as_secs() < 120)
+                                     .unwrap_or(false);
         was_down && restarted_recently
     }
 
@@ -216,13 +203,11 @@ impl SreStore {
 
     /// Returns the most recent findings, deduplicated by (container, hash) so
     /// two replicas scanning the same container don't produce double entries.
-    pub async fn read_recent(
-        client: &Client,
-        limit: u64,
-    ) -> Result<Vec<SreObservation>, SreStoreError> {
-        let rows = client
-            .query(
-                "SELECT
+    pub async fn read_recent(client: &Client,
+                             limit: u64)
+                             -> Result<Vec<SreObservation>, SreStoreError> {
+        let rows = client.query(
+                                "SELECT
                     max(observed_at) AS observed_at,
                     container_name,
                     argMax(severity,     observed_at) AS severity,
@@ -235,18 +220,17 @@ impl SreStore {
                  GROUP BY container_name, log_window_hash
                  ORDER BY observed_at DESC
                  LIMIT ?",
-            )
-            .bind(limit)
-            .fetch_all::<SreObservation>()
-            .await?;
+        )
+                         .bind(limit)
+                         .fetch_all::<SreObservation>()
+                         .await?;
         Ok(rows)
     }
 
     pub async fn write(&mut self, obs: &SreObservation) -> Result<(), SreStoreError> {
-        let mut insert = self
-            .client
-            .insert::<SreObservation>("sre_observations")
-            .await?;
+        let mut insert = self.client
+                             .insert::<SreObservation>("sre_observations")
+                             .await?;
         insert.write(obs).await?;
         insert.end().await?;
         Ok(())
@@ -267,16 +251,15 @@ pub async fn fetch_pipeline_lag(ch: &Client) -> (i64, String, i32) {
         ch_backlog_batches: i32,
     }
 
-    let rows: Vec<LagRow> = match ch
-        .query(
-            "SELECT total_lag, ch_backlog_batches \
+    let rows: Vec<LagRow> = match ch.query(
+                                           "SELECT total_lag, ch_backlog_batches \
              FROM pipeline_lag \
              WHERE consumer_group = 'rules-engine' \
              ORDER BY recorded_at DESC \
              LIMIT 2",
-        )
-        .fetch_all()
-        .await
+    )
+                                    .fetch_all()
+                                    .await
     {
         Ok(r) => r,
         Err(_) => return (0, "stable".into(), 0),

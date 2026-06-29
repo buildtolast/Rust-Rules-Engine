@@ -11,12 +11,10 @@ use store_postgres::{
 const DSN: &str = "postgres://rules:rules@localhost:5432/ruleaudit";
 
 fn input(expr: &str, enabled: bool) -> RuleInput {
-    RuleInput {
-        description: "test rule".into(),
-        expression: expr.into(),
-        target_topic: "target-events".into(),
-        enabled,
-    }
+    RuleInput { description: "test rule".into(),
+                expression: expr.into(),
+                target_topic: "target-events".into(),
+                enabled }
 }
 
 // One test controls table state end-to-end to avoid cross-test interference on
@@ -24,18 +22,15 @@ fn input(expr: &str, enabled: bool) -> RuleInput {
 #[tokio::test]
 #[ignore = "requires live Postgres (deploy/run.sh)"]
 async fn crud_seed_and_notify() {
-    test_support::skip_if_unavailable!(
-        test_support::probe_postgres(),
-        "Postgres at localhost:5432"
-    );
+    test_support::skip_if_unavailable!(test_support::probe_postgres(),
+                                       "Postgres at localhost:5432");
     let pool = connect(DSN).await.expect("connect");
     run_migrations(&pool).await.expect("migrations");
 
     // Clean slate. TRUNCATE does not fire the row-level NOTIFY trigger.
-    sqlx::query("TRUNCATE rules")
-        .execute(&pool)
-        .await
-        .expect("truncate");
+    sqlx::query("TRUNCATE rules").execute(&pool)
+                                 .await
+                                 .expect("truncate");
 
     let repo = RuleRepository::new(pool.clone());
 
@@ -52,10 +47,10 @@ async fn crud_seed_and_notify() {
     assert_eq!(created.version, 1);
     assert!(!created.id.is_empty());
 
-    let payload = tokio::time::timeout(Duration::from_secs(5), listener.recv())
-        .await
-        .expect("NOTIFY within 5s")
-        .expect("recv ok");
+    let payload =
+        tokio::time::timeout(Duration::from_secs(5), listener.recv()).await
+                                                                     .expect("NOTIFY within 5s")
+                                                                     .expect("recv ok");
     assert_eq!(payload, created.id, "NOTIFY payload is the changed rule id");
 
     // get
@@ -63,11 +58,10 @@ async fn crud_seed_and_notify() {
     assert_eq!(got.expression, "event.x > 1");
 
     // update bumps version and persists changes
-    let updated = repo
-        .update(&created.id, &input("event.x > 2", false))
-        .await
-        .unwrap()
-        .expect("updated");
+    let updated = repo.update(&created.id, &input("event.x > 2", false))
+                      .await
+                      .unwrap()
+                      .expect("updated");
     assert_eq!(updated.version, 2);
     assert!(!updated.enabled);
     assert_eq!(updated.expression, "event.x > 2");

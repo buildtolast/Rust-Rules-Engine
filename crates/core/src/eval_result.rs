@@ -41,10 +41,9 @@ impl EvaluationResult {
     pub fn verdict(&self) -> AuditType {
         if self.matched() {
             AuditType::Matched
-        } else if self
-            .rule_results
-            .iter()
-            .any(|r| r.audit_type == AuditType::Errored)
+        } else if self.rule_results
+                      .iter()
+                      .any(|r| r.audit_type == AuditType::Errored)
         {
             AuditType::Errored
         } else {
@@ -58,11 +57,9 @@ mod tests {
     use super::*;
 
     fn result(audit_type: AuditType) -> RuleResult {
-        RuleResult {
-            rule_id: "r1".into(),
-            audit_type,
-            reason: None,
-        }
+        RuleResult { rule_id: "r1".into(),
+                     audit_type,
+                     reason: None }
     }
 
     #[test]
@@ -73,19 +70,15 @@ mod tests {
 
     #[test]
     fn matched_true_when_any_matched() {
-        let r = EvaluationResult::new(vec![
-            result(AuditType::Unmatched),
-            result(AuditType::Matched),
-        ]);
+        let r =
+            EvaluationResult::new(vec![result(AuditType::Unmatched), result(AuditType::Matched),]);
         assert!(r.matched());
     }
 
     #[test]
     fn matched_false_when_none_matched() {
-        let r = EvaluationResult::new(vec![
-            result(AuditType::Unmatched),
-            result(AuditType::Errored),
-        ]);
+        let r =
+            EvaluationResult::new(vec![result(AuditType::Unmatched), result(AuditType::Errored),]);
         assert!(!r.matched());
     }
 
@@ -102,28 +95,22 @@ mod tests {
 
     #[test]
     fn verdict_errored_when_no_match_but_some_errored() {
-        let r = EvaluationResult::new(vec![
-            result(AuditType::Unmatched),
-            result(AuditType::Errored),
-        ]);
+        let r =
+            EvaluationResult::new(vec![result(AuditType::Unmatched), result(AuditType::Errored),]);
         assert_eq!(r.verdict(), AuditType::Errored);
     }
 
     #[test]
     fn verdict_unmatched_when_all_unmatched() {
-        let r = EvaluationResult::new(vec![
-            result(AuditType::Unmatched),
-            result(AuditType::Unmatched),
-        ]);
+        let r = EvaluationResult::new(vec![result(AuditType::Unmatched),
+                                           result(AuditType::Unmatched),]);
         assert_eq!(r.verdict(), AuditType::Unmatched);
     }
 
     #[test]
     fn verdict_unmatched_when_empty() {
-        assert_eq!(
-            EvaluationResult::new(vec![]).verdict(),
-            AuditType::Unmatched
-        );
+        assert_eq!(EvaluationResult::new(vec![]).verdict(),
+                   AuditType::Unmatched);
     }
 
     #[test]

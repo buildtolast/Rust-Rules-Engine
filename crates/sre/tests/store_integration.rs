@@ -3,7 +3,6 @@
 use chrono::Utc;
 use clickhouse::Client;
 use sre::store::{SreObservation, SreStore};
-use test_support;
 
 fn test_client() -> Client {
     Client::default()
@@ -16,7 +15,10 @@ fn test_client() -> Client {
 #[tokio::test]
 #[ignore]
 async fn dedup_same_hash_keeps_one_row() {
-    test_support::skip_if_unavailable!(test_support::probe_clickhouse(), "ClickHouse at localhost:8123");
+    test_support::skip_if_unavailable!(
+        test_support::probe_clickhouse(),
+        "ClickHouse at localhost:8123"
+    );
     let client = test_client();
     let mut store = SreStore::new(&client);
 

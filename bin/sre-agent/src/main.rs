@@ -53,14 +53,12 @@ async fn main() {
                 .unwrap_or_else(|_| "redpanda-0:9092,redpanda-1:9092,redpanda-2:9092".into()),
             clickhouse_url: std::env::var("CLICKHOUSE_URL")
                 .unwrap_or_else(|_| "http://clickhouse:8123".into()),
-            postgres_host: std::env::var("POSTGRES_HOST")
-                .unwrap_or_else(|_| "postgres".into()),
+            postgres_host: std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "postgres".into()),
             postgres_port: std::env::var("POSTGRES_PORT")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(5432),
-            app_url: std::env::var("APP_URL")
-                .unwrap_or_else(|_| "http://app:8080".into()),
+            app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://app:8080".into()),
         },
     };
 

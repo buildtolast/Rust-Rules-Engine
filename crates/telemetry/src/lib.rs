@@ -88,5 +88,8 @@ pub fn init(service_name: &str) -> ShutdownGuard {
         .with(OpenTelemetryTracingBridge::new(&logger_provider))
         .init();
 
-    ShutdownGuard { tracer_provider, logger_provider }
+    ShutdownGuard {
+        tracer_provider,
+        logger_provider,
+    }
 }

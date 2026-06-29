@@ -66,6 +66,26 @@ pub async fn watch_and_reload(
     }
 }
 
+/// Fetch all enabled rules from Postgres and compile each one.
+/// Compile errors are warnings, not failures.
+async fn compile_enabled(
+    repo: &store_postgres::RuleRepository,
+) -> Result<Vec<eval::CompiledRule>, CacheError> {
+    let rules = repo.list().await?;
+    let compiled = rules
+        .into_iter()
+        .filter(|r| r.enabled)
+        .filter_map(|r| match compile(&r) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                tracing::warn!("skipping rule {}: {}", r.id, e);
+                None
+            }
+        })
+        .collect();
+    Ok(compiled)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,7 +108,11 @@ mod tests {
     fn test_cache_get_returns_snapshot() {
         let cache = RuleCache::new(vec![]);
         let snapshot = cache.get();
-        assert_eq!(snapshot.len(), 0, "empty cache should return empty snapshot");
+        assert_eq!(
+            snapshot.len(),
+            0,
+            "empty cache should return empty snapshot"
+        );
     }
 
     #[test]
@@ -99,7 +123,11 @@ mod tests {
         let rule = make_rule("rule-1", "true");
         cache.swap(vec![rule]);
 
-        assert_eq!(cache.get().len(), 1, "after swap, cache should reflect new rule set");
+        assert_eq!(
+            cache.get().len(),
+            1,
+            "after swap, cache should reflect new rule set"
+        );
         assert_eq!(cache.get()[0].id, "rule-1");
     }
 
@@ -139,24 +167,4 @@ mod tests {
         assert_eq!(snapshot[0].id, "r2");
         assert_eq!(snapshot[1].id, "r3");
     }
-}
-
-/// Fetch all enabled rules from Postgres and compile each one.
-/// Compile errors are warnings, not failures.
-async fn compile_enabled(
-    repo: &store_postgres::RuleRepository,
-) -> Result<Vec<eval::CompiledRule>, CacheError> {
-    let rules = repo.list().await?;
-    let compiled = rules
-        .into_iter()
-        .filter(|r| r.enabled)
-        .filter_map(|r| match compile(&r) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                tracing::warn!("skipping rule {}: {}", r.id, e);
-                None
-            }
-        })
-        .collect();
-    Ok(compiled)
 }

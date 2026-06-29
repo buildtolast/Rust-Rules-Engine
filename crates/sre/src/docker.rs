@@ -67,7 +67,13 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
             .as_ref()
             .and_then(|hc| hc.restart_policy.as_ref())
             .and_then(|rp| rp.name.as_ref())
-            .map(|n| matches!(n, bollard::models::RestartPolicyNameEnum::EMPTY | bollard::models::RestartPolicyNameEnum::NO))
+            .map(|n| {
+                matches!(
+                    n,
+                    bollard::models::RestartPolicyNameEnum::EMPTY
+                        | bollard::models::RestartPolicyNameEnum::NO
+                )
+            })
             .unwrap_or(true);
         let started_at = state.started_at.as_deref().and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(s)
@@ -95,12 +101,11 @@ pub async fn list_containers(docker: &Docker) -> Result<Vec<ContainerInfo>, Dock
 /// equals cpu_stats and always yields 0% CPU.
 /// Returns `None` for stopped containers or on any API error.
 pub async fn fetch_stats(docker: &Docker, id: &str) -> Option<(f64, u64, u64)> {
-    let opts = StatsOptions { stream: false, one_shot: false };
-    let stats = docker
-        .stats(id, Some(opts))
-        .next()
-        .await?
-        .ok()?;
+    let opts = StatsOptions {
+        stream: false,
+        one_shot: false,
+    };
+    let stats = docker.stats(id, Some(opts)).next().await?.ok()?;
 
     let cpu_delta = stats
         .cpu_stats

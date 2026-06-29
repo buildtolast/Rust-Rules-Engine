@@ -102,8 +102,7 @@ fn ch_client(cfg: &SreConfig) -> Client {
 
 const MIGRATION_SRE: &str =
     include_str!("../../../migrations/clickhouse/0002_sre_observations.sql");
-const MIGRATION_OUTAGES: &str =
-    include_str!("../../../migrations/clickhouse/0004_sre_outages.sql");
+const MIGRATION_OUTAGES: &str = include_str!("../../../migrations/clickhouse/0004_sre_outages.sql");
 
 async fn run_migration(client: &Client) -> anyhow::Result<()> {
     client.query(MIGRATION_SRE).execute().await?;
@@ -124,16 +123,23 @@ fn sha256_hex(s: &str) -> String {
     hex::encode(h.finalize())
 }
 
+struct ScanCtx<'a> {
+    ch: &'a Client,
+    cfg: &'a SreConfig,
+    tuner: &'a Arc<auto_tune::AutoTuner>,
+}
+
 async fn scan_once(
     docker: &bollard::Docker,
     llm: &AnalysisClient,
     store: &mut SreStore,
     state: &Arc<RwLock<SreState>>,
     tx: &broadcast::Sender<Finding>,
-    cfg: &SreConfig,
-    ch: &Client,
-    tuner: &Arc<auto_tune::AutoTuner>,
+    ctx: &ScanCtx<'_>,
 ) {
+    let cfg = ctx.cfg;
+    let ch = ctx.ch;
+    let tuner = ctx.tuner;
     // Probe LLM once per scan so the badge reflects real availability even when
     // all containers are healthy and no analysis calls are made.
     state.write().await.llm_available = llm.probe().await;
@@ -158,7 +164,9 @@ async fn scan_once(
             let id = c.id.clone();
             async move {
                 if c.running {
-                    docker::fetch_stats(&docker, &id).await.unwrap_or((0.0, 0, 0))
+                    docker::fetch_stats(&docker, &id)
+                        .await
+                        .unwrap_or((0.0, 0, 0))
                 } else {
                     (0.0, 0, 0)
                 }
@@ -169,18 +177,20 @@ async fn scan_once(
         let statuses = active
             .iter()
             .zip(all_stats)
-            .map(|(c, (cpu_percent, mem_used_bytes, mem_limit_bytes))| ContainerStatus {
-                name: c.name.clone(),
-                id: c.id.clone(),
-                running: c.running,
-                started_at: c.started_at,
-                health: c.health.clone(),
-                last_checked_at: Utc::now(),
-                last_severity: None,
-                cpu_percent,
-                mem_used_bytes,
-                mem_limit_bytes,
-            })
+            .map(
+                |(c, (cpu_percent, mem_used_bytes, mem_limit_bytes))| ContainerStatus {
+                    name: c.name.clone(),
+                    id: c.id.clone(),
+                    running: c.running,
+                    started_at: c.started_at,
+                    health: c.health.clone(),
+                    last_checked_at: Utc::now(),
+                    last_severity: None,
+                    cpu_percent,
+                    mem_used_bytes,
+                    mem_limit_bytes,
+                },
+            )
             .collect();
 
         let mut st = state.write().await;
@@ -212,22 +222,23 @@ async fn scan_once(
             let used_mb = cs.mem_used_bytes / 1_048_576;
             let limit_mb = cs.mem_limit_bytes / 1_048_576;
             let suggested_mb = (cs.mem_used_bytes as f64 / 0.4) as u64 / 1_048_576;
-            let finding = analysis::Finding {
-                severity: severity.to_string(),
-                category: "resource_pressure".to_string(),
-                finding: format!(
+            let finding =
+                analysis::Finding {
+                    severity: severity.to_string(),
+                    category: "resource_pressure".to_string(),
+                    finding: format!(
                     "Memory usage is {:.1}% ({} MB / {} MB) — above the 60% advisory threshold.",
                     pct, used_mb, limit_mb
                 ),
-                proposed_fix: format!(
+                    proposed_fix: format!(
                     "Increase the memory limit for {} to ~{} MB so current usage stays below 40%. \
                      Update the relevant *_MEM_LIMIT env var in docker-compose.yml and run \
                      `docker compose up -d --no-deps {}`.",
                     cs.name, suggested_mb, cs.name.trim_start_matches("rre-")
                 ),
-                container_name: cs.name.clone(),
-                observed_at: Some(Utc::now()),
-            };
+                    container_name: cs.name.clone(),
+                    observed_at: Some(Utc::now()),
+                };
             let hash = sha256_hex(&format!("{}:mem:{:.0}", cs.name, pct / 5.0 * 5.0));
             if !store.is_unchanged(&cs.name, &hash) {
                 store.record_hash(&cs.name, &hash);
@@ -368,7 +379,10 @@ async fn analyze_container(
             };
 
             let fix = if restarted {
-                format!("Container {} was automatically restarted by the SRE agent.", c.name)
+                format!(
+                    "Container {} was automatically restarted by the SRE agent.",
+                    c.name
+                )
             } else {
                 format!("Restart with: docker start {}", c.name)
             };
@@ -504,7 +518,19 @@ async fn analysis_loop(
     ));
 
     loop {
-        scan_once(&docker, &llm, &mut store, &state, &tx, &cfg, &ch, &tuner).await;
+        scan_once(
+            &docker,
+            &llm,
+            &mut store,
+            &state,
+            &tx,
+            &ScanCtx {
+                ch: &ch,
+                cfg: &cfg,
+                tuner: &tuner,
+            },
+        )
+        .await;
         tokio::time::sleep(cfg.scan_interval).await;
     }
 }

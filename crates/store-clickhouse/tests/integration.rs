@@ -5,7 +5,6 @@
 use chrono::Utc;
 use rules_core::{audit_id, AuditRecord, AuditType};
 use store_clickhouse::{client, run_migrations, AuditWriter, ClickHouseConfig};
-use test_support;
 
 fn rec(topic: &str, partition: i32, offset: i64, rule_id: &str) -> AuditRecord {
     AuditRecord {
@@ -34,7 +33,10 @@ struct CountRow {
 #[tokio::test]
 #[ignore = "requires live ClickHouse (deploy/run.sh)"]
 async fn audits_persist_and_dedup_by_audit_id() {
-    test_support::skip_if_unavailable!(test_support::probe_clickhouse(), "ClickHouse at localhost:8123");
+    test_support::skip_if_unavailable!(
+        test_support::probe_clickhouse(),
+        "ClickHouse at localhost:8123"
+    );
     let cfg = ClickHouseConfig::default();
     let client = client(&cfg);
     run_migrations(&client).await.expect("migrations");

@@ -125,7 +125,10 @@ Limit each array to 5 items. Be specific — name rule IDs and techniques."#
 fn extract_json(s: &str) -> &str {
     // Strip markdown code fences first.
     let s = s.trim();
-    let s = s.strip_prefix("```json").or_else(|| s.strip_prefix("```")).unwrap_or(s);
+    let s = s
+        .strip_prefix("```json")
+        .or_else(|| s.strip_prefix("```"))
+        .unwrap_or(s);
     let s = s.strip_suffix("```").unwrap_or(s);
     let s = s.trim();
     // Find the JSON object even when the LLM wraps it in prose or reasoning steps.
@@ -192,11 +195,21 @@ pub async fn fetch_insights(ch: &Client, llm: &AnalysisClient) -> TraceInsights 
                 // Strip markdown fences that local LLMs often emit despite instructions.
                 let json = extract_json(&raw);
                 match serde_json::from_str::<LlmResponse>(json) {
-                    Ok(resp) => (resp.insights, resp.top_bottlenecks, resp.recommendations, true),
+                    Ok(resp) => (
+                        resp.insights,
+                        resp.top_bottlenecks,
+                        resp.recommendations,
+                        true,
+                    ),
                     Err(e) => {
                         let preview: String = raw.chars().take(100).collect();
                         warn!("trace_analysis: LLM JSON parse failed: {e}. Raw: {preview}");
-                        (vec!["LLM response unparseable".into()], vec![], vec![], true)
+                        (
+                            vec!["LLM response unparseable".into()],
+                            vec![],
+                            vec![],
+                            true,
+                        )
                     }
                 }
             }

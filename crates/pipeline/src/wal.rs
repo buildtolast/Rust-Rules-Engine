@@ -31,7 +31,12 @@ fn wal_path() -> PathBuf {
 /// Open or create the WAL file for append + read.
 /// Returns `None` if the path cannot be created (logs error, does not panic).
 fn open_wal(path: &PathBuf) -> Option<File> {
-    match OpenOptions::new().create(true).read(true).append(true).open(path) {
+    match OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(path)
+    {
         Ok(f) => Some(f),
         Err(e) => {
             tracing::error!(
@@ -120,7 +125,10 @@ pub async fn run_writer(
     if let Some(ref mut f) = wal_file {
         let batches = read_batches(f);
         if !batches.is_empty() {
-            tracing::info!(count = batches.len(), "replaying WAL batches from previous run");
+            tracing::info!(
+                count = batches.len(),
+                "replaying WAL batches from previous run"
+            );
             for batch in batches {
                 backlog.fetch_add(1, Relaxed);
                 write_with_backoff(&client, &ch_cfg, &batch).await;

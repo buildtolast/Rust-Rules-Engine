@@ -14,20 +14,17 @@ pub async fn probe_tcp(addr: &str) -> bool {
 }
 
 pub async fn probe_postgres() -> bool {
-    let host = std::env::var("TEST_POSTGRES_ADDR")
-        .unwrap_or_else(|_| "localhost:5432".into());
+    let host = std::env::var("TEST_POSTGRES_ADDR").unwrap_or_else(|_| "localhost:5432".into());
     probe_tcp(&host).await
 }
 
 pub async fn probe_clickhouse() -> bool {
-    let host = std::env::var("TEST_CLICKHOUSE_ADDR")
-        .unwrap_or_else(|_| "localhost:8123".into());
+    let host = std::env::var("TEST_CLICKHOUSE_ADDR").unwrap_or_else(|_| "localhost:8123".into());
     probe_tcp(&host).await
 }
 
 pub async fn probe_kafka() -> bool {
-    let host = std::env::var("TEST_KAFKA_ADDR")
-        .unwrap_or_else(|_| "localhost:19092".into());
+    let host = std::env::var("TEST_KAFKA_ADDR").unwrap_or_else(|_| "localhost:19092".into());
     probe_tcp(&host).await
 }
 
@@ -48,7 +45,10 @@ pub async fn probe_kafka() -> bool {
 macro_rules! skip_if_unavailable {
     ($probe:expr, $label:expr) => {
         if !$probe.await {
-            eprintln!("[SKIP] {} is not reachable — skipping integration test", $label);
+            eprintln!(
+                "[SKIP] {} is not reachable — skipping integration test",
+                $label
+            );
             return;
         }
     };

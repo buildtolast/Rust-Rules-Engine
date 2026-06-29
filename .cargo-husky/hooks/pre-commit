@@ -1,0 +1,13 @@
+#!/bin/sh
+# Auto-format all Rust code, re-stage the changes, then run clippy.
+# Installed automatically by cargo-husky on `cargo test`.
+set -e
+
+echo "==> cargo fmt"
+cargo fmt --all
+
+# Re-stage any files rustfmt changed so the formatted version is what gets committed.
+git add -u
+
+echo "==> cargo clippy"
+cargo clippy --all-targets -- -D warnings

@@ -87,12 +87,13 @@ async fn main() -> anyhow::Result<()> {
         let mut current_listener = listener;
         let mut backoff = std::time::Duration::from_secs(1);
         loop {
-            match pipeline::watch_and_reload(cache_bg.clone(), repo_bg.clone(), current_listener).await {
+            match pipeline::watch_and_reload(cache_bg.clone(), repo_bg.clone(), current_listener)
+                .await
+            {
                 Ok(()) => break,
                 Err(e) => {
                     tracing::error!("hot-reload error: {e} — reconnecting in {backoff:?}");
                     tokio::time::sleep(backoff).await;
-                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
                     match store_postgres::RuleChangeListener::connect(&pool_bg).await {
                         Ok(new_listener) => {
                             current_listener = new_listener;

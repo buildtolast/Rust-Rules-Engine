@@ -1,4 +1,8 @@
-use crate::{analysis::AnalysisClient, store::{Incident, SreStore}, trace_analysis, Finding, SreState};
+use crate::{
+    analysis::AnalysisClient,
+    store::{Incident, SreStore},
+    trace_analysis, Finding, SreState,
+};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -246,9 +250,7 @@ async fn traces_insights(State(s): State<AppState>) -> Json<trace_analysis::Trac
     Json(insights)
 }
 
-async fn system_ready(
-    State(app): State<AppState>,
-) -> (StatusCode, Json<serde_json::Value>) {
+async fn system_ready(State(app): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     let st = app.state.read().await;
     let (total_lag, lag_trend, ch_backlog_batches) =
         crate::store::fetch_pipeline_lag(&app.ch).await;
@@ -272,11 +274,7 @@ async fn system_ready(
         None => serde_json::json!({}),
     };
 
-    let all_services_ok = st
-        .last_probe
-        .as_ref()
-        .map(|p| p.all_ok)
-        .unwrap_or(false);
+    let all_services_ok = st.last_probe.as_ref().map(|p| p.all_ok).unwrap_or(false);
 
     let ready = all_services_ok && total_lag == 0;
     let degraded = !ready;

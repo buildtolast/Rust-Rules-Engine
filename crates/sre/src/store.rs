@@ -95,10 +95,7 @@ impl SreStore {
     }
 
     pub async fn write_outage_event(&mut self, ev: &SreOutageEvent) -> Result<(), SreStoreError> {
-        let mut insert = self
-            .client
-            .insert::<SreOutageEvent>("sre_outages")
-            .await?;
+        let mut insert = self.client.insert::<SreOutageEvent>("sre_outages").await?;
         insert.write(ev).await?;
         insert.end().await?;
         Ok(())

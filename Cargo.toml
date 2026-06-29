@@ -42,3 +42,7 @@ opentelemetry_sdk             = { version = "0.27", features = ["rt-tokio", "tra
 opentelemetry-otlp            = { version = "0.27", features = ["tonic", "trace", "logs"] }
 opentelemetry-appender-tracing = { version = "0.27" }
 tracing-opentelemetry         = "0.28"
+
+[workspace.metadata.cargo-husky]
+# cargo-husky reads this section for hook configuration.
+

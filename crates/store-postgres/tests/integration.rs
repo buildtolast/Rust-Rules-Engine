@@ -2,7 +2,6 @@
 //! Run with: `cargo test -p store-postgres -- --ignored`.
 //! Excluded from default/CI runs because they need infra.
 
-use test_support;
 use std::time::Duration;
 
 use store_postgres::{
@@ -25,7 +24,10 @@ fn input(expr: &str, enabled: bool) -> RuleInput {
 #[tokio::test]
 #[ignore = "requires live Postgres (deploy/run.sh)"]
 async fn crud_seed_and_notify() {
-    test_support::skip_if_unavailable!(test_support::probe_postgres(), "Postgres at localhost:5432");
+    test_support::skip_if_unavailable!(
+        test_support::probe_postgres(),
+        "Postgres at localhost:5432"
+    );
     let pool = connect(DSN).await.expect("connect");
     run_migrations(&pool).await.expect("migrations");
 

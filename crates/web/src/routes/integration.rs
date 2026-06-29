@@ -42,25 +42,27 @@ async fn tcp_ok(addr: &str) -> bool {
 }
 
 pub async fn status() -> Json<IntegrationStatus> {
-    let pg_addr = std::env::var("TEST_POSTGRES_ADDR")
-        .unwrap_or_else(|_| "localhost:5432".into());
-    let ch_addr = std::env::var("TEST_CLICKHOUSE_ADDR")
-        .unwrap_or_else(|_| "localhost:8123".into());
-    let kf_addr = std::env::var("TEST_KAFKA_ADDR")
-        .unwrap_or_else(|_| "localhost:19092".into());
+    let pg_addr = std::env::var("TEST_POSTGRES_ADDR").unwrap_or_else(|_| "localhost:5432".into());
+    let ch_addr = std::env::var("TEST_CLICKHOUSE_ADDR").unwrap_or_else(|_| "localhost:8123".into());
+    let kf_addr = std::env::var("TEST_KAFKA_ADDR").unwrap_or_else(|_| "localhost:19092".into());
 
-    let (pg_ok, ch_ok, kf_ok) = tokio::join!(
-        tcp_ok(&pg_addr),
-        tcp_ok(&ch_addr),
-        tcp_ok(&kf_addr),
-    );
+    let (pg_ok, ch_ok, kf_ok) = tokio::join!(tcp_ok(&pg_addr), tcp_ok(&ch_addr), tcp_ok(&kf_addr),);
 
     Json(IntegrationStatus {
         ready: pg_ok && ch_ok && kf_ok,
         services: Services {
-            postgres: ServiceCheck { ok: pg_ok, addr: pg_addr },
-            clickhouse: ServiceCheck { ok: ch_ok, addr: ch_addr },
-            kafka: ServiceCheck { ok: kf_ok, addr: kf_addr },
+            postgres: ServiceCheck {
+                ok: pg_ok,
+                addr: pg_addr,
+            },
+            clickhouse: ServiceCheck {
+                ok: ch_ok,
+                addr: ch_addr,
+            },
+            kafka: ServiceCheck {
+                ok: kf_ok,
+                addr: kf_addr,
+            },
         },
     })
 }
@@ -69,7 +71,10 @@ pub async fn status() -> Json<IntegrationStatus> {
 /// output as SSE. Requires `ENABLE_TEST_RUNNER=1` — returns 403 otherwise.
 /// NEVER expose this endpoint in production: it is unauthenticated remote code execution.
 pub async fn run() -> Response {
-    if std::env::var("ENABLE_TEST_RUNNER").unwrap_or_default().is_empty() {
+    if std::env::var("ENABLE_TEST_RUNNER")
+        .unwrap_or_default()
+        .is_empty()
+    {
         return (
             StatusCode::FORBIDDEN,
             "Set ENABLE_TEST_RUNNER=1 to enable this endpoint",
@@ -78,7 +83,13 @@ pub async fn run() -> Response {
     }
 
     let mut child = match Command::new("cargo")
-        .args(["test", "--workspace", "--include-ignored", "--color", "never"])
+        .args([
+            "test",
+            "--workspace",
+            "--include-ignored",
+            "--color",
+            "never",
+        ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -297,7 +308,10 @@ mod tests {
         assert!(!s.services.postgres.addr.is_empty());
         assert!(!s.services.clickhouse.addr.is_empty());
         assert!(!s.services.kafka.addr.is_empty());
-        assert_eq!(s.ready, s.services.postgres.ok && s.services.clickhouse.ok && s.services.kafka.ok);
+        assert_eq!(
+            s.ready,
+            s.services.postgres.ok && s.services.clickhouse.ok && s.services.kafka.ok
+        );
     }
 
     #[tokio::test]

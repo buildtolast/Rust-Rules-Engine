@@ -117,9 +117,7 @@ impl AnalysisClient {
                     Ok(r) if !r.status().is_success() => {
                         let status = r.status();
                         let body = r.text().await.unwrap_or_default();
-                        return Err(AnalysisError::Unavailable(
-                            format!("HTTP {status}: {body}")
-                        ));
+                        return Err(AnalysisError::Unavailable(format!("HTTP {status}: {body}")));
                     }
                     Ok(r) => {
                         result = Some(r);
@@ -231,22 +229,19 @@ impl AnalysisClient {
                 Ok(r) if !r.status().is_success() => {
                     last_err = Some(format!("HTTP {}", r.status()));
                 }
-                Ok(r) => {
-                    match r.json::<serde_json::Value>().await {
-                        Ok(payload) => {
-                            if let Some(content) = payload["choices"][0]["message"]["content"]
-                                .as_str()
-                            {
-                                result_text = Some(content.to_string());
-                                break;
-                            }
-                            last_err = Some("missing content field".into());
+                Ok(r) => match r.json::<serde_json::Value>().await {
+                    Ok(payload) => {
+                        if let Some(content) = payload["choices"][0]["message"]["content"].as_str()
+                        {
+                            result_text = Some(content.to_string());
+                            break;
                         }
-                        Err(e) => {
-                            last_err = Some(e.to_string());
-                        }
+                        last_err = Some("missing content field".into());
                     }
-                }
+                    Err(e) => {
+                        last_err = Some(e.to_string());
+                    }
+                },
             }
         }
 
@@ -329,7 +324,10 @@ impl AnalysisClient {
 
         let req = Req {
             model: &self.model,
-            messages: vec![Msg { role: "user", content: prompt }],
+            messages: vec![Msg {
+                role: "user",
+                content: prompt,
+            }],
             temperature: 0.2,
             max_tokens: 1024,
         };
@@ -342,12 +340,7 @@ impl AnalysisClient {
             request = request.bearer_auth(key);
         }
 
-        let resp: Resp = request
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let resp: Resp = request.send().await?.error_for_status()?.json().await?;
 
         Ok(resp
             .choices
@@ -378,7 +371,10 @@ fn quote_bare_keys(s: &str) -> String {
                 i += 1;
             }
             // If next char is not '"', try to read an identifier
-            if i < bytes.len() && bytes[i] != b'"' && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+            if i < bytes.len()
+                && bytes[i] != b'"'
+                && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_')
+            {
                 let start = i;
                 while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
                     i += 1;

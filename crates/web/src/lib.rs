@@ -28,7 +28,7 @@ use axum::{
     Router,
 };
 use rdkafka::producer::FutureProducer;
-use tower_http::cors::{Any, AllowOrigin, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 /// Shared application state injected into every handler via axum's `State` extractor.

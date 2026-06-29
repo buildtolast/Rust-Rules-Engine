@@ -200,16 +200,14 @@ pub async fn run(
             // ── Postgres health gate ──────────────────────────────────────────
             let pg_ok = pg_flag_loop.load(Ordering::Relaxed);
             if !pg_ok && !was_paused {
-                let all_partitions =
-                    consumer_all_partitions(&consumer, &config.source_topic);
+                let all_partitions = consumer_all_partitions(&consumer, &config.source_topic);
                 if let Err(e) = consumer.pause(&all_partitions) {
                     tracing::warn!("failed to pause consumer: {e}");
                 }
                 tracing::warn!("postgres unhealthy — consumer paused");
                 was_paused = true;
             } else if pg_ok && was_paused {
-                let all_partitions =
-                    consumer_all_partitions(&consumer, &config.source_topic);
+                let all_partitions = consumer_all_partitions(&consumer, &config.source_topic);
                 if let Err(e) = consumer.resume(&all_partitions) {
                     tracing::warn!("failed to resume consumer: {e}");
                 }
@@ -282,8 +280,7 @@ pub async fn run(
                 .par_iter()
                 .map(|msg| {
                     let _parse_span =
-                        tracing::debug_span!("event.parse", "kafka.offset" = msg.offset)
-                            .entered();
+                        tracing::debug_span!("event.parse", "kafka.offset" = msg.offset).entered();
                     let parse_start = Instant::now();
                     let event = match rules_core::SourceEvent::from_kafka(
                         &msg.topic,
@@ -422,7 +419,9 @@ pub async fn run(
 
             // ── Phase 4: fire-and-forget lag row to ClickHouse ────────────────
             let ch_backlog = backlog_loop.load(Ordering::Relaxed);
-            counters.ch_backlog_batches.store(ch_backlog, Ordering::Relaxed);
+            counters
+                .ch_backlog_batches
+                .store(ch_backlog, Ordering::Relaxed);
             let lag_row = LagRow {
                 ts: chrono::Utc::now(),
                 consumer_group: config.consumer_group.clone(),
@@ -529,20 +528,29 @@ mod tests {
     fn test_audit_id_uniqueness_by_rule() {
         let id_a = audit_id("events", 0, 10, "rule-A");
         let id_b = audit_id("events", 0, 10, "rule-B");
-        assert_ne!(id_a, id_b, "different rules on the same event must yield distinct audit IDs");
+        assert_ne!(
+            id_a, id_b,
+            "different rules on the same event must yield distinct audit IDs"
+        );
     }
 
     #[test]
     fn test_audit_id_uniqueness_by_offset() {
         let id_a = audit_id("events", 0, 1, "rule-X");
         let id_b = audit_id("events", 0, 2, "rule-X");
-        assert_ne!(id_a, id_b, "same rule on different offsets must yield distinct audit IDs");
+        assert_ne!(
+            id_a, id_b,
+            "same rule on different offsets must yield distinct audit IDs"
+        );
     }
 
     #[test]
     fn test_audit_id_uniqueness_by_partition() {
         let id_a = audit_id("events", 0, 5, "rule-X");
         let id_b = audit_id("events", 1, 5, "rule-X");
-        assert_ne!(id_a, id_b, "same rule/offset on different partitions must yield distinct IDs");
+        assert_ne!(
+            id_a, id_b,
+            "same rule/offset on different partitions must yield distinct IDs"
+        );
     }
 }

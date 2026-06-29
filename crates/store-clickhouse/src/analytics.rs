@@ -232,12 +232,24 @@ mod tests {
         };
         let v: Value = serde_json::to_value(&stats).expect("serialization failed");
         assert!(v.get("totalMessages").is_some(), "expected totalMessages");
-        assert!(v.get("totalEvaluations").is_some(), "expected totalEvaluations");
+        assert!(
+            v.get("totalEvaluations").is_some(),
+            "expected totalEvaluations"
+        );
         assert!(v.get("ruleStats").is_some(), "expected ruleStats");
         assert!(v.get("timeSeries").is_some(), "expected timeSeries");
-        assert!(v.get("avgParseTimeNano").is_some(), "expected avgParseTimeNano");
-        assert!(v.get("avgEvalTimeNano").is_some(), "expected avgEvalTimeNano");
-        assert!(v.get("avgTotalTimeNano").is_some(), "expected avgTotalTimeNano");
+        assert!(
+            v.get("avgParseTimeNano").is_some(),
+            "expected avgParseTimeNano"
+        );
+        assert!(
+            v.get("avgEvalTimeNano").is_some(),
+            "expected avgEvalTimeNano"
+        );
+        assert!(
+            v.get("avgTotalTimeNano").is_some(),
+            "expected avgTotalTimeNano"
+        );
 
         // Snake-case keys must NOT appear
         assert!(v.get("total_messages").is_none());
@@ -284,7 +296,9 @@ mod tests {
         let v: Value = serde_json::to_value(&point).expect("serialization failed");
         assert!(v.get("timestamp").is_some(), "expected timestamp field");
         // chrono with serde serializes DateTime<Utc> as RFC 3339 string
-        let ts_str = v["timestamp"].as_str().expect("timestamp should be a string");
+        let ts_str = v["timestamp"]
+            .as_str()
+            .expect("timestamp should be a string");
         assert!(
             ts_str.contains("1970"),
             "epoch timestamp should contain 1970, got: {ts_str}"
@@ -324,9 +338,15 @@ mod tests {
         assert!(v.get("partition").is_some(), "expected partition");
         assert!(v.get("offset").is_some(), "expected offset");
         assert!(v.get("timestamp_secs").is_some(), "expected timestamp_secs");
-        assert!(v.get("parse_time_nano").is_some(), "expected parse_time_nano");
+        assert!(
+            v.get("parse_time_nano").is_some(),
+            "expected parse_time_nano"
+        );
         assert!(v.get("eval_time_nano").is_some(), "expected eval_time_nano");
-        assert!(v.get("total_time_nano").is_some(), "expected total_time_nano");
+        assert!(
+            v.get("total_time_nano").is_some(),
+            "expected total_time_nano"
+        );
 
         // CamelCase keys must NOT appear (no rename_all on this struct)
         assert!(v.get("auditId").is_none());
@@ -350,8 +370,7 @@ mod tests {
         use rules_core::{AuditRecord, AuditType};
 
         let cfg = ClickHouseConfig {
-            url: std::env::var("CLICKHOUSE_URL")
-                .unwrap_or_else(|_| "http://localhost:8123".into()),
+            url: std::env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into()),
             ..ClickHouseConfig::default()
         };
         let ch = client(&cfg);
@@ -409,8 +428,7 @@ mod tests {
         use crate::{client, ClickHouseConfig};
 
         let cfg = ClickHouseConfig {
-            url: std::env::var("CLICKHOUSE_URL")
-                .unwrap_or_else(|_| "http://localhost:8123".into()),
+            url: std::env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into()),
             ..ClickHouseConfig::default()
         };
         let ch = client(&cfg);
@@ -420,13 +438,13 @@ mod tests {
         let to = now + chrono::Duration::hours(1);
 
         let result = query_top_audits(&ch, "MATCHED", from, to, 10).await;
-        assert!(result.is_ok(), "query_top_audits returned Err: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "query_top_audits returned Err: {:?}",
+            result
+        );
         // Length may be 0 if no MATCHED rows exist — that is a valid state.
         let rows = result.unwrap();
-        assert!(
-            rows.len() <= 10,
-            "limit=10 but got {} rows",
-            rows.len()
-        );
+        assert!(rows.len() <= 10, "limit=10 but got {} rows", rows.len());
     }
 }

@@ -27,3 +27,5 @@ anyhow         = "1"
 tokio = { workspace = true }
 test-support = { path = "../test-support" }
 tempfile = "3"
+# Installs .cargo-husky/hooks/pre-commit on `cargo test` (formats + lints before every commit).
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "user-hooks"] }

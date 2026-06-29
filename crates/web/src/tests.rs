@@ -12,6 +12,7 @@
 //!   INTEGRATION=1 cargo test -p web -- --include-ignored
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use axum::{
         body::Body,
@@ -20,14 +21,18 @@ mod tests {
         Router,
     };
     use http_body_util::BodyExt;
+
     use tower_service::Service;
-    use test_support;
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /// Read the full body of an axum `Response<Body>` into a `Vec<u8>`.
     async fn collect_body(body: Body) -> Vec<u8> {
-        body.collect().await.expect("collect body").to_bytes().to_vec()
+        body.collect()
+            .await
+            .expect("collect body")
+            .to_bytes()
+            .to_vec()
     }
 
     /// Drive a `Router` like `oneshot` does: poll_ready then call.
@@ -36,10 +41,7 @@ mod tests {
     /// `tower = "0.4"` while axum 0.7 uses `tower 0.5` internally, creating
     /// two rlib candidates. Instead we use `tower_service::Service` directly —
     /// `Router` is always ready so skipping `poll_ready` is safe here.
-    async fn call(
-        mut router: Router,
-        req: Request<Body>,
-    ) -> axum::response::Response {
+    async fn call(mut router: Router, req: Request<Body>) -> axum::response::Response {
         router.call(req).await.expect("router call failed")
     }
 
@@ -124,20 +126,19 @@ mod tests {
     /// Returns `None` if any required env var is missing — the caller should skip.
     async fn try_build_app_state() -> Option<crate::AppState> {
         let pg_url = std::env::var("DATABASE_URL").ok()?;
-        let ch_url = std::env::var("CLICKHOUSE_URL")
-            .unwrap_or_else(|_| "http://localhost:8123".to_string());
-        let kafka_brokers = std::env::var("KAFKA_BROKERS")
-            .unwrap_or_else(|_| "localhost:9092".to_string());
-        let source_topic = std::env::var("SOURCE_TOPIC")
-            .unwrap_or_else(|_| "source-events".to_string());
+        let ch_url =
+            std::env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".to_string());
+        let kafka_brokers =
+            std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+        let source_topic =
+            std::env::var("SOURCE_TOPIC").unwrap_or_else(|_| "source-events".to_string());
 
         // Postgres
         let pool = store_postgres::connect(&pg_url).await.ok()?;
         let rules = store_postgres::RuleRepository::new(pool);
 
         // ClickHouse — `Client` uses the builder pattern; `Default` points to localhost:8123.
-        let ch_client =
-            store_clickhouse::ClickHouseClient::default().with_url(&ch_url);
+        let ch_client = store_clickhouse::ClickHouseClient::default().with_url(&ch_url);
 
         // Kafka producer
         use rdkafka::config::ClientConfig;
@@ -166,7 +167,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_rules_list_returns_200_with_array() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
@@ -191,7 +196,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_create_rule_returns_201_and_retrieve_returns_200() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
@@ -221,7 +230,10 @@ mod tests {
         assert_eq!(create_response.status(), StatusCode::CREATED);
         let bytes = collect_body(create_response.into_body()).await;
         let created: serde_json::Value = serde_json::from_slice(&bytes).expect("valid JSON");
-        let id = created["id"].as_str().expect("response has 'id' field").to_owned();
+        let id = created["id"]
+            .as_str()
+            .expect("response has 'id' field")
+            .to_owned();
 
         // GET /api/rules/:id
         let get_response = call(
@@ -247,7 +259,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_get_nonexistent_rule_returns_404() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
@@ -269,7 +285,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_analytics_stats_returns_200_with_object_body() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
@@ -297,7 +317,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_readiness_probe_returns_valid_shape() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
@@ -334,7 +358,11 @@ mod tests {
     #[ignore = "requires INTEGRATION=1 and a running Postgres+ClickHouse+Kafka stack"]
     async fn test_export_rejects_unknown_audit_type() {
         test_support::skip_if_unavailable!(
-            async { test_support::probe_postgres().await && test_support::probe_clickhouse().await && test_support::probe_kafka().await },
+            async {
+                test_support::probe_postgres().await
+                    && test_support::probe_clickhouse().await
+                    && test_support::probe_kafka().await
+            },
             "full stack (Postgres + ClickHouse + Kafka)"
         );
         let Some(state) = try_build_app_state().await else {
